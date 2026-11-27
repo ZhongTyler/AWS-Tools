@@ -1,0 +1,181 @@
+{
+  "source": "9e30505a0ebfba97efb2b3157becec43b2a2d050",
+  "baseline": "e904489f6048172058677b4c8c9167b8f7b060b8",
+  "files": [
+    {
+      "path": "integrations/copy-polish/BATCHING.md",
+      "source_commit": "9e30505a0ebfba97efb2b3157becec43b2a2d050",
+      "source_sha256": "56bad88bf778432944117ceb789cfbc8c8b242e29b4096ce451b7f67d586c3fe"
+    },
+    {
+      "path": "integrations/copy-polish/HISTORY.md",
+      "source_commit": "9e30505a0ebfba97efb2b3157becec43b2a2d050",
+      "source_sha256": "62be103aa972a87749612b8204152f717baeef6ae2400041adf1d3faa0297a1c"
+    },
+    {
+      "path": "integrations/copy-polish/REASSESSMENT.md",
+      "source_commit": "9e30505a0ebfba97efb2b3157becec43b2a2d050",
+      "source_sha256": "6c0ba1a9c78c34a8301168815da80215167211b00256f9501c929f5b2dbd3094"
+    },
+    {
+      "path": "integrations/copy-polish/SOURCE-RETENTION.md",
+      "source_commit": "9e30505a0ebfba97efb2b3157becec43b2a2d050",
+      "source_sha256": "1674504623403237bd42509afb10abc766def5b48668a2c56ad0046267a79f24"
+    },
+    {
+      "path": "integrations/copy-polish/STREAMING.md",
+      "source_commit": "9e30505a0ebfba97efb2b3157becec43b2a2d050",
+      "source_sha256": "2197ac9591fed0e4247937fd1552c86d8c3a7798aff0e6b6f1df34d1d88bd132"
+    },
+    {
+      "path": "integrations/copy-polish/knowledge_batch.py",
+      "source_commit": "9e30505a0ebfba97efb2b3157becec43b2a2d050",
+      "source_sha256": "241e06d4bba2a5a446ca2b365700bfc67b1a2a3218ba85b6e4d75ccfab060a0c"
+    },
+    {
+      "path": "integrations/copy-polish/knowledge_document.py",
+      "source_commit": "9e30505a0ebfba97efb2b3157becec43b2a2d050",
+      "source_sha256": "9ecb06b5c4f9077522a8d0d3330b7059cae5818c247c4a4f9f9a4a3ac134d42b"
+    },
+    {
+      "path": "integrations/copy-polish/literal_guard.py",
+      "source_commit": "9e30505a0ebfba97efb2b3157becec43b2a2d050",
+      "source_sha256": "1e54c6028723d9d486692fb54b31d0f40c0e8eb6a59549b1cf02ad9b8326f578"
+    },
+    {
+      "path": "integrations/copy-polish/reassess_report.py",
+      "source_commit": "9e30505a0ebfba97efb2b3157becec43b2a2d050",
+      "source_sha256": "e5083480e1cf69759becace0f6427974a43bae895acb083456b8bddb6033d603"
+    },
+    {
+      "path": "integrations/copy-polish/report_document.py",
+      "source_commit": "9e30505a0ebfba97efb2b3157becec43b2a2d050",
+      "source_sha256": "35975ac9cabaadd52f2135d4df565add2cc6fce43682db14e7ec5214d3613f7b"
+    },
+    {
+      "path": "integrations/copy-polish/run.py",
+      "source_commit": "9e30505a0ebfba97efb2b3157becec43b2a2d050",
+      "source_sha256": "157273d9b01f301aff2e69ff5ce913401432a90af8fcfc9bd59f72096d3c3911"
+    },
+    {
+      "path": "integrations/copy-polish/source_retention_report.py",
+      "source_commit": "9e30505a0ebfba97efb2b3157becec43b2a2d050",
+      "source_sha256": "292920df79096bff6d740506dbb94053e2ed28a3bccdf4c9ee4d1bc27c73085f"
+    },
+    {
+      "path": "integrations/copy-polish/study_document.py",
+      "source_commit": "9e30505a0ebfba97efb2b3157becec43b2a2d050",
+      "source_sha256": "f613fd6578cf24158dc1dc78d754e2e27351d9cc2b5d25df2200421624410945"
+    },
+    {
+      "path": "integrations/copy-polish/test_author_frozen.py",
+      "source_commit": "9e30505a0ebfba97efb2b3157becec43b2a2d050",
+      "source_sha256": "4cb34f694884086902a2faf3f0375384d212c1dd14d1ed7bf80cd3305bd80261"
+    },
+    {
+      "path": "integrations/copy-polish/test_contract.py",
+      "source_commit": "9e30505a0ebfba97efb2b3157becec43b2a2d050",
+      "source_sha256": "5b89cf79833936b13e57c30267abe40048f126f2f98fb0dc518584f9b3d4af89"
+    },
+    {
+      "path": "integrations/copy-polish/test_history.py",
+      "source_commit": "9e30505a0ebfba97efb2b3157becec43b2a2d050",
+      "source_sha256": "57db1353747653477da5b452385355ebab2b1c57d5afbe749cbdb5039261281b"
+    },
+    {
+      "path": "integrations/copy-polish/test_knowledge_batch.py",
+      "source_commit": "9e30505a0ebfba97efb2b3157becec43b2a2d050",
+      "source_sha256": "00c11690be842259ea56296b816b32fab171af74e646cb59addec2baedc46e92"
+    },
+    {
+      "path": "integrations/copy-polish/test_literal_guard.py",
+      "source_commit": "9e30505a0ebfba97efb2b3157becec43b2a2d050",
+      "source_sha256": "2d0ebf4a8df626636c8cb0728b6693602cc2271f266d7d987c4030f8161641fa"
+    },
+    {
+      "path": "integrations/copy-polish/test_response_policy.py",
+      "source_commit": "9e30505a0ebfba97efb2b3157becec43b2a2d050",
+      "source_sha256": "46c331ef156f2eb830b1b6aad36d7d328d13fc5ada7b00f73618eb8c0e2eea29"
+    },
+    {
+      "path": "integrations/copy-polish/test_source_retention.py",
+      "source_commit": "9e30505a0ebfba97efb2b3157becec43b2a2d050",
+      "source_sha256": "3266e73ff6bf5b6fe8e5dbc4b04ea45f736cc0bd5b237f637a8c2fdd69798637"
+    },
+    {
+      "path": "integrations/codex-context-budget/guard.py",
+      "source_commit": "9e30505a0ebfba97efb2b3157becec43b2a2d050",
+      "source_sha256": "0bcdbdd3135faaaff8bc4bf41539d4ea77b4896a47857483624c64b524e49b86"
+    },
+    {
+      "path": "integrations/codex-context-budget/policy.json",
+      "source_commit": "9e30505a0ebfba97efb2b3157becec43b2a2d050",
+      "source_sha256": "13c77708ddefb0b00d584dc052582d27cb6a7c11c5f2119e005ac6d8299c0c62"
+    },
+    {
+      "path": "integrations/codex-context-budget/test_guard.py",
+      "source_commit": "9e30505a0ebfba97efb2b3157becec43b2a2d050",
+      "source_sha256": "53a85080b099a7819c337cb2f62c852b056c2fdcc0221772ed0973058539b688"
+    }
+  ],
+  "changes": [
+    "recipient provider settings instead of fixed private relay/model/key/diagnostic root",
+    "public synthetic tests omit listener-based StreamingTransportTests; parser/transport implementation otherwise preserved",
+    "new registry/workflow/dispatcher entries; explicit client home"
+  ],
+  "public_sha256": {
+    "integrations/copy-polish/BATCHING.md": "56bad88bf778432944117ceb789cfbc8c8b242e29b4096ce451b7f67d586c3fe",
+    "integrations/copy-polish/HISTORY.md": "62be103aa972a87749612b8204152f717baeef6ae2400041adf1d3faa0297a1c",
+    "integrations/copy-polish/REASSESSMENT.md": "6c0ba1a9c78c34a8301168815da80215167211b00256f9501c929f5b2dbd3094",
+    "integrations/copy-polish/SOURCE-RETENTION.md": "1674504623403237bd42509afb10abc766def5b48668a2c56ad0046267a79f24",
+    "integrations/copy-polish/STREAMING.md": "2197ac9591fed0e4247937fd1552c86d8c3a7798aff0e6b6f1df34d1d88bd132",
+    "integrations/copy-polish/knowledge_batch.py": "8f2b4b8c4e9eaa3a8153c2979edbf2ec81c86aaf440c70f4bd581ac0bec29bf4",
+    "integrations/copy-polish/knowledge_document.py": "9ecb06b5c4f9077522a8d0d3330b7059cae5818c247c4a4f9f9a4a3ac134d42b",
+    "integrations/copy-polish/literal_guard.py": "1e54c6028723d9d486692fb54b31d0f40c0e8eb6a59549b1cf02ad9b8326f578",
+    "integrations/copy-polish/reassess_report.py": "e5083480e1cf69759becace0f6427974a43bae895acb083456b8bddb6033d603",
+    "integrations/copy-polish/report_document.py": "35975ac9cabaadd52f2135d4df565add2cc6fce43682db14e7ec5214d3613f7b",
+    "integrations/copy-polish/run.py": "2ac81bd69f358b11fdc525b43da88dd3d90e7341bf602240572e4ca69cd2e1c4",
+    "integrations/copy-polish/source_retention_report.py": "292920df79096bff6d740506dbb94053e2ed28a3bccdf4c9ee4d1bc27c73085f",
+    "integrations/copy-polish/study_document.py": "f613fd6578cf24158dc1dc78d754e2e27351d9cc2b5d25df2200421624410945",
+    "integrations/copy-polish/test_author_frozen.py": "4cb34f694884086902a2faf3f0375384d212c1dd14d1ed7bf80cd3305bd80261",
+    "integrations/copy-polish/test_contract.py": "2b88bc43df5e5e0b6ad60999e2022499916bda5f4af6186ba167592b5b09cd7c",
+    "integrations/copy-polish/test_history.py": "57db1353747653477da5b452385355ebab2b1c57d5afbe749cbdb5039261281b",
+    "integrations/copy-polish/test_knowledge_batch.py": "aba6cc5240cb1479fb53c8dc63c722616b8e90b87458945f388b6a977943acb9",
+    "integrations/copy-polish/test_literal_guard.py": "2d0ebf4a8df626636c8cb0728b6693602cc2271f266d7d987c4030f8161641fa",
+    "integrations/copy-polish/test_response_policy.py": "46c331ef156f2eb830b1b6aad36d7d328d13fc5ada7b00f73618eb8c0e2eea29",
+    "integrations/copy-polish/test_source_retention.py": "3266e73ff6bf5b6fe8e5dbc4b04ea45f736cc0bd5b237f637a8c2fdd69798637",
+    "integrations/codex-context-budget/guard.py": "381606f95e2073cc49fb0ef32ef46ee1e14e26870e8a5debee6da08a9196b7d2",
+    "integrations/codex-context-budget/policy.json": "13c77708ddefb0b00d584dc052582d27cb6a7c11c5f2119e005ac6d8299c0c62",
+    "integrations/codex-context-budget/test_guard.py": "14afbb91fd1a3abade5303b8fa93b37b0e64128a00afceb24a6af1ebabc25231"
+  },
+  "selected_tools": [
+    "copy-polish",
+    "codex-context-budget"
+  ],
+  "source_license": "Workspace-maintained executor/adapters distributed under existing package MIT; no third-party model/assets or private fixtures copied",
+  "model_calls": 0,
+  "changed_functions": {
+    "integrations/copy-polish/run.py": [
+      "candidate_receipt",
+      "configure_provider",
+      "generate",
+      "main",
+      "metadata"
+    ],
+    "integrations/copy-polish/knowledge_batch.py": [
+      "candidate",
+      "disposition_plan"
+    ],
+    "integrations/codex-context-budget/guard.py": [
+      "main"
+    ]
+  },
+  "immutable_protocol_modules": 6,
+  "new_public_files": [
+    "integrations/copy-polish/provider.example.json",
+    "integrations/copy-polish/provider_settings.py",
+    "integrations/copy-polish/README.md",
+    "integrations/codex-context-budget/README.md"
+  ],
+  "provider_qualification": "offline substituted URL/model/key/diagnostic validation only; no real provider or recipient client activated"
+}

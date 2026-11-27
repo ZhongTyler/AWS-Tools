@@ -101,4 +101,10 @@ FLUX klein和CPU抠图维护组件随包保存固定版本与显式入口，权�
 
 [2.2.0 Git 范围预检与升级恢复](docs/release-2.2.0.md) · [git-scope](integrations/git-scope/README.md)
 
-当前版本共 **17项工具、15条可选workflow**。新增 [Git范围预检](integrations/git-scope/README.md)、[精灵图离线检查](integrations/sprite-diagnostics/README.md)、[Demo参数与音频配套](integrations/demo-support/README.md)。
+当前版本共 **19项工具、17条可选workflow**。新增 [Git范围预检](integrations/git-scope/README.md)、[精灵图离线检查](integrations/sprite-diagnostics/README.md)、[Demo参数与音频配套](integrations/demo-support/README.md)。
+
+## 2.3.0 文案与客户端维护
+
+新增[可审核文案候选](integrations/copy-polish/README.md)与[图片上下文预算](integrations/codex-context-budget/README.md)。前者支持离线核对与接收方显式配置的Gemini兼容服务；后者只在明确选择的客户端home预览／安装并由用户审查信任。安装本包不调用模型、不提供账号、不激活钩子。
+
+本包health --integrity只核工程来源与文件库存，不证明provider连通、运行时效果或业务质量。使用范围、升级恢复和验证见[2.3.0](docs/release-2.3.0.md)。原17项工具逐字段保留，旧workflow只在三个明确消费入口追加copy-polish，没有替换原默认路径。

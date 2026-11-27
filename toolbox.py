@@ -197,6 +197,8 @@ def launch(workflow,tool,action,args,base=BASE):
     elif tool=='demo-support':
         if action!='health' or args:raise ValueError('Demo support executable action is fixed health; processing follows the guide')
         cmd=[sys.executable,'-X','utf8','-B',str(folder/'health.py')]
+    elif tool=='copy-polish':cmd=[sys.executable,'-X','utf8','-B',str(folder/'run.py'),action,workflow,*args]
+    elif tool=='codex-context-budget':cmd=[sys.executable,'-X','utf8','-B',str(folder/'guard.py'),action,*args]
     elif tool=='decisions':
         python=folder/'runtime/client/Scripts/python.exe'
         if action=='classify':

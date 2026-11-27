@@ -28,7 +28,8 @@
         "rea",
         "media",
         "browser",
-        "research-sources"
+        "research-sources",
+        "copy-polish"
       ],
       "default_path": "Original game research and Knowledge contracts; GameHOT is an optional cached candidate source with immediate original-source fallback"
     },
@@ -40,7 +41,8 @@
       "tools": [
         "media",
         "research-sources",
-        "retrieval"
+        "retrieval",
+        "copy-polish"
       ],
       "default_path": "BM25 discovery when configured; explicit hybrid, immediate original Query fallback; original full-source/ingestion/final-review contracts remain"
     },
@@ -64,7 +66,8 @@
         "rea",
         "media",
         "flux-klein",
-        "cutout"
+        "cutout",
+        "copy-polish"
       ],
       "default_path": "Host contracts; no automatic priority or project decisions"
     },
@@ -168,6 +171,26 @@
         "demo-support"
       ],
       "default_path": "Original asset/demo process; no automatic adoption or runtime setup"
+    },
+    {
+      "id": "personal-site-copy",
+      "owner": "Recipient host",
+      "entry": "integrations/copy-polish/README.md",
+      "stage": "optional_host_binding_required",
+      "tools": [
+        "copy-polish"
+      ],
+      "default_path": "Retain source; generate candidates only for explicitly selected text and review before adoption"
+    },
+    {
+      "id": "client-maintenance",
+      "owner": "Recipient client owner",
+      "entry": "integrations/codex-context-budget/README.md",
+      "stage": "explicit_client_install_and_trust_required",
+      "tools": [
+        "codex-context-budget"
+      ],
+      "default_path": "Preview hooks and preserve all existing handlers; apply only to the selected client home"
     }
   ]
 }

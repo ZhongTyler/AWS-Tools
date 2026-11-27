@@ -1,10 +1,17 @@
 {
   "component_id": "tools",
-  "file_count": 250,
-  "generated_at": "2026-10-28T09:01:10+08:00",
-  "generator_version": "3.0.0",
-  "manifest_sha256": "dfa564b55fc2d68723c9cbf5ce07c16c30f8377a22bea996b6d8542603fb7b79",
-  "preview": false,
+  "file_count": 412,
+  "generated_at": "2026-11-27T08:14:56.360264+00:00",
+  "generator_version": "standalone-tools-reviewed-1",
+  "preview": true,
   "release_schema": 1,
-  "source_revision": "a4366ac0bb09123aad1a7cc519a573f5e5c9720c"
+  "source_revision": "9e30505a0ebfba97efb2b3157becec43b2a2d050",
+  "version": "2.3.0",
+  "previous_version": "2.2.0",
+  "tools": 19,
+  "workflows": 17,
+  "legacy_manifest_sha256": "dfa564b55fc2d68723c9cbf5ce07c16c30f8377a22bea996b6d8542603fb7b79",
+  "registry_sha256": "c115ed1d85b718c52dccaf0a83595ed9ba75f0e357f405d9aa5e14c5e93419a1",
+  "workflows_sha256": "0cb940f4f6f3a0f87465ba71a43d978e0d0ac180a964b4e3705f1a7b627e10a7",
+  "portable_profile_sha256": "52997a8a11d1b4631c8fe8ee9559d9d489d67e7e93d96bfe074c2a96b0dd9ad7"
 }

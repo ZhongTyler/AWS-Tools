@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "api_family": "gemini-generate-content",
+  "origin": "https://provider.example.test",
+  "model": "recipient-model-id",
+  "key_env": "COPY_POLISH_API_KEY",
+  "diagnostic_root": "REPLACE_WITH_EXISTING_ABSOLUTE_PRIVATE_DIRECTORY"
+}

@@ -1,0 +1,6 @@
+{
+  "schema_version": 1,
+  "warning_bytes": 20000000,
+  "maximum_bytes": 80000000,
+  "maximum_tool_image_bytes": 20000000
+}

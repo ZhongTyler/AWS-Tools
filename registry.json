@@ -341,6 +341,64 @@
       ],
       "required_runtime": [],
       "limits": "Reusable numeric parameter adapter and existing-audio processing only; fixed source health; Node/browser or separately configured NumPy/SoundFile. Project owns settings, state and listening acceptance."
+    },
+    {
+      "id": "copy-polish",
+      "root": "integrations/copy-polish",
+      "maintenance": "README.md",
+      "status": "on_request",
+      "actions": [
+        "guide",
+        "candidate",
+        "check"
+      ],
+      "required_sources": [
+        "BATCHING.md",
+        "HISTORY.md",
+        "knowledge_batch.py",
+        "knowledge_document.py",
+        "literal_guard.py",
+        "provider.example.json",
+        "provider_settings.py",
+        "README.md",
+        "reassess_report.py",
+        "REASSESSMENT.md",
+        "report_document.py",
+        "run.py",
+        "SOURCE-RETENTION.md",
+        "source_retention_report.py",
+        "STREAMING.md",
+        "study_document.py",
+        "test_author_frozen.py",
+        "test_contract.py",
+        "test_history.py",
+        "test_knowledge_batch.py",
+        "test_literal_guard.py",
+        "test_provider_settings.py",
+        "test_response_policy.py",
+        "test_source_retention.py"
+      ],
+      "required_runtime": [],
+      "limits": "Offline candidate/adoption/source-retention checks; live requests require recipient provider/model/key-env/private diagnostics and host authorization; no bundled service or key."
+    },
+    {
+      "id": "codex-context-budget",
+      "root": "integrations/codex-context-budget",
+      "maintenance": "README.md",
+      "status": "on_request",
+      "actions": [
+        "status",
+        "install",
+        "uninstall"
+      ],
+      "required_sources": [
+        "guard.py",
+        "policy.json",
+        "README.md",
+        "test_guard.py"
+      ],
+      "required_runtime": [],
+      "limits": "Explicit install preview/apply into a recipient-selected home; review hook trust; no client activation, service or model by package installation."
     }
   ]
 }
