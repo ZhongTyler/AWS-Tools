@@ -33,3 +33,7 @@ flowchart LR
 <!-- module-panorama:end -->
 
 The [AWS overview](https://github.com/ZhongTyler/AgentWorkSpace) presents the full module network. This module retains original third-party notices and the reviewed 1.30.0 source record. Independent module versioning starts at 2.0.0.
+
+[Packaging order and dual integrity](docs/packaging-integrity.md)
+
+[2.1.0 changes and upgrade/recovery](docs/release-2.1.0.md)

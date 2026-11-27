@@ -165,3 +165,28 @@ test('finding factory binds mechanical fields to actual receipt and preserves co
  const selected=recordsForFinding(receipt.continuation,changed,{...finding,consumption:[{ref:'source-A',version:'v2',stage:'read'}]});
  assert.equal(selected.signals[0].sources.length,2);assert.equal(selected.signals[0].sources.find(s=>s.version==='v1').stage,'returned');
 });
+
+
+test('resolution retains evidence, leaves selection and exact retry is idempotent',t=>{
+ const store=new FileStore({home:path.join(tmp(t),'resolution'),namespace:ns});
+ store.apply([signal(),issue()],{now});
+ const result=outcome({validation_ref:'validation:1',result_ref:'owner-result:1',evidence:{ingested:null,used:null,adopted:{refs:['change:1'],scope:'the owner change'},effect_observed:null}});
+ store.resolveIssue({issueId:'i1',outcome:result,now});
+ assert.equal(store.read().records.issue.i1.status,'resolved');
+ assert.equal(store.read().records.issue.i1.handoff_ref,'owner-result:1');
+ assert.equal(store.read().records.outcome_link.o1.result_ref,'owner-result:1');
+ assert.deepEqual(store.select({terms:['stage'],now}),[]);
+ const before=fs.readFileSync(store.file,'utf8');
+ assert.equal(store.resolveIssue({issueId:'i1',outcome:result,now}).persisted,false);
+ assert.equal(fs.readFileSync(store.file,'utf8'),before);
+ assert.throws(()=>store.resolveIssue({issueId:'i1',outcome:{...result,result_ref:'other'},now}));
+});
+
+test('resolution rejects absent owner, mismatched issue and unproved result without persistence',t=>{
+ for(const [change,patch] of [[{},{}],[{validation_ref:'validation:1',result_ref:'result:1'},{}],[{issue_id:'other'},{}],[{validation_ref:'validation:1',result_ref:'result:1',evidence:{ingested:null,used:null,adopted:{refs:['change:1'],scope:'the owner change'},effect_observed:null}},{owner:null}]]){
+  const store=new FileStore({home:path.join(tmp(t),'resolution'),namespace:ns});
+  store.apply([signal(),issue('i1',['s1'],patch)],{now});const before=fs.readFileSync(store.file,'utf8');
+  assert.throws(()=>store.resolveIssue({issueId:'i1',outcome:outcome(change),now}));
+  assert.equal(fs.readFileSync(store.file,'utf8'),before);
+ }
+});

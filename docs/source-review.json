@@ -1,0 +1,279 @@
+{
+  "schema_version": 1,
+  "module_version": "2.1.0",
+  "public_baseline": "181fcab209e5f772d13dd9e6cf284a7034028cfc",
+  "source_commit": "2cc7e26b23c725a175a4fd153d375d737914c55c",
+  "source_read_method": "git show frozen commit; working-tree dirty never exported",
+  "public_tools": 14,
+  "public_workflows": 12,
+  "review": [
+    {
+      "id": "decisions",
+      "decision": "retained",
+      "reason": "Only private installation/status documentation differs; fixed model versions and license boundaries retained.",
+      "public_payload_files_before": 35,
+      "reviewed_changed_paths": [
+        "integrations/decision-models/README.md"
+      ],
+      "source_only_count_excluded": 2
+    },
+    {
+      "id": "rea",
+      "decision": "retained",
+      "reason": "Differences are local paths, host output ownership and connection receipts; public adapter and licensed upstream references retained.",
+      "public_payload_files_before": 19,
+      "reviewed_changed_paths": [
+        "integrations/rea/README.md",
+        "integrations/rea/skill/rea-investigate/references/local-connection.md",
+        "integrations/rea/skill/rea-investigate/SKILL.md"
+      ],
+      "source_only_count_excluded": 19
+    },
+    {
+      "id": "media",
+      "decision": "updated",
+      "reason": "Added offline local HTML body-candidate action with optional Trafilatura 2.3.1 and preserved-source fallback. XHS account/media-specific addition deferred.",
+      "public_payload_files_before": 4,
+      "reviewed_changed_paths": [
+        "integrations/media/README.md"
+      ],
+      "source_only_count_excluded": 4
+    },
+    {
+      "id": "browser",
+      "decision": "retained",
+      "reason": "Differences are local maintenance history; no transferable code delta.",
+      "public_payload_files_before": 3,
+      "reviewed_changed_paths": [
+        "integrations/browser/README.md"
+      ],
+      "source_only_count_excluded": 1
+    },
+    {
+      "id": "research-sources",
+      "decision": "updated",
+      "reason": "Preserve controlled shared HN/RSS configuration; standalone synthetic installer tests; private shared broker/host configuration remains excluded.",
+      "public_payload_files_before": 58,
+      "reviewed_changed_paths": [
+        "integrations/mcp/README.md",
+        "integrations/mcp/scripts/install.py",
+        "integrations/mcp/tests/test_install.py"
+      ],
+      "source_only_count_excluded": 95
+    },
+    {
+      "id": "flux-klein",
+      "decision": "retained",
+      "reason": "New schema2/studio executor chain needs adjacent tools and recipient setup; public external-home guards, source pins and optional status preserved.",
+      "public_payload_files_before": 7,
+      "reviewed_changed_paths": [
+        "integrations/flux-klein/generate.py",
+        "integrations/flux-klein/README.md",
+        "integrations/flux-klein/source-lock.json",
+        "integrations/flux-klein/start.ps1",
+        "integrations/flux-klein/stop.ps1"
+      ],
+      "source_only_count_excluded": 5
+    },
+    {
+      "id": "cutout",
+      "decision": "retained",
+      "reason": "Only local download timing/mirror/status differ; published upstream URL, checksum and recipient-validation boundary retained.",
+      "public_payload_files_before": 5,
+      "reviewed_changed_paths": [
+        "integrations/cutout/README.md",
+        "integrations/cutout/source-lock.json"
+      ],
+      "source_only_count_excluded": 0
+    },
+    {
+      "id": "local-image",
+      "decision": "deferred_dependency_batch",
+      "reason": "Preserve public schema1 three-profile implementation. New schema2, H3/Qwen21, studio/resource/LoRA dependencies are a separate asset batch; no partial imports or private art qualification copied.",
+      "public_payload_files_before": 7,
+      "reviewed_changed_paths": [
+        "integrations/local-image/pipeline.py",
+        "integrations/local-image/profiles.py",
+        "integrations/local-image/README.md",
+        "integrations/local-image/runtime_support.py",
+        "integrations/local-image/worker.py"
+      ],
+      "source_only_count_excluded": 52
+    },
+    {
+      "id": "retrieval",
+      "decision": "retained",
+      "reason": "All nine portable files identical to frozen source; no delta.",
+      "public_payload_files_before": 9,
+      "reviewed_changed_paths": [],
+      "source_only_count_excluded": 0
+    },
+    {
+      "id": "anatomy",
+      "decision": "retained",
+      "reason": "Only private validation/installation documentation differs; fixed MIT original remains identical.",
+      "public_payload_files_before": 6,
+      "reviewed_changed_paths": [
+        "integrations/anatomy/README.md"
+      ],
+      "source_only_count_excluded": 2
+    },
+    {
+      "id": "knowledge-feedback",
+      "decision": "updated",
+      "reason": "Source resolved state and evidenced owner-result closure; added success/idempotence/refusal tests.",
+      "public_payload_files_before": 6,
+      "reviewed_changed_paths": [
+        "integrations/knowledge-feedback/core.mjs",
+        "integrations/knowledge-feedback/README.md",
+        "integrations/knowledge-feedback/store.mjs"
+      ],
+      "source_only_count_excluded": 0
+    },
+    {
+      "id": "bilibili-capture",
+      "decision": "updated",
+      "reason": "Explicit bounded media duration plus publication metadata; retain public vendor paths, prominent patch notices, checksums, anonymous guards, external output HOME and input-root restrictions. Dependency lock only differs by line whitespace and is retained.",
+      "public_payload_files_before": 37,
+      "reviewed_changed_paths": [
+        "integrations/bilibili-capture/asr.py",
+        "integrations/bilibili-capture/capture.py",
+        "integrations/bilibili-capture/check-reader.mjs",
+        "integrations/bilibili-capture/platform.mjs",
+        "integrations/bilibili-capture/reader-lock.json",
+        "integrations/bilibili-capture/reader.mjs",
+        "integrations/bilibili-capture/README.md",
+        "integrations/bilibili-capture/requirements-windows-py312.lock",
+        "integrations/bilibili-capture/server.py",
+        "integrations/bilibili-capture/test_capture.py"
+      ],
+      "source_only_count_excluded": 8
+    },
+    {
+      "id": "metaphysics-charting",
+      "decision": "updated",
+      "reason": "Confirmed caller-corrected solar clock, Jie boundary refusal and provisional Yun/SVG labels. Keep explicit sharp configuration. Tests use standalone adapter; viewer/server and private validation excluded.",
+      "public_payload_files_before": 27,
+      "reviewed_changed_paths": [
+        "integrations/metaphysics-charting/chart.mjs",
+        "integrations/metaphysics-charting/check.mjs",
+        "integrations/metaphysics-charting/README.md",
+        "integrations/metaphysics-charting/render.mjs"
+      ],
+      "source_only_count_excluded": 19
+    },
+    {
+      "id": "collaboration-checks",
+      "decision": "retained",
+      "reason": "Public-only portable adapter; no matching source integration root. Existing reviewed adapter retained unchanged.",
+      "public_payload_files_before": 5,
+      "reviewed_changed_paths": [],
+      "source_only_count_excluded": 0
+    }
+  ],
+  "projection": [
+    {
+      "path": "integrations/knowledge-feedback/core.mjs",
+      "method": "exact_frozen_source",
+      "sha256": "f6898010b9b031bfa3f14f9acb889d8460ec8b7c752166fb43f0b78b346e079b"
+    },
+    {
+      "path": "integrations/knowledge-feedback/store.mjs",
+      "method": "exact_frozen_source",
+      "sha256": "b7b3625d4e3f02311ef6048ba220107d1c51fbd0efc303774238d3438d707285"
+    },
+    {
+      "path": "integrations/bilibili-capture/capture.py",
+      "method": "exact_frozen_source",
+      "sha256": "1a3317022235328b33df196a09d2ee02e16a47aa49cf350a503ced40c38a4376"
+    },
+    {
+      "path": "integrations/bilibili-capture/asr.py",
+      "method": "exact_frozen_source",
+      "sha256": "4e3d087f242da454001ae5c576067b4a34e9ee93cab5b476a390b627c9a50cb8"
+    },
+    {
+      "path": "integrations/bilibili-capture/check-reader.mjs",
+      "method": "exact_frozen_source",
+      "sha256": "111e5635e7be53afb49920515be4bedeef6bb898db2cf0f6f2c30f9e6368d0e2"
+    },
+    {
+      "path": "integrations/bilibili-capture/test_capture.py",
+      "method": "exact_frozen_source",
+      "sha256": "8a3e19be8ebd69b2f14e79779b8d13279d669bae2a4282ce35fa4ecf9a591f16"
+    },
+    {
+      "path": "integrations/bilibili-capture/reader.mjs",
+      "method": "frozen_source_preserving_public_vendor_location",
+      "sha256": "eb51a90588204994b55b663940c1c2c3c0d7546bd6373ad8391d256a538eb697"
+    },
+    {
+      "path": "integrations/media/body_candidate.py",
+      "method": "exact_frozen_source",
+      "sha256": "9292cfaa4da22f6cf04ca0a6c603556e4281f365770a54df0ebe11db87f371df"
+    },
+    {
+      "path": "integrations/media/requirements-body-candidate-windows-py312.lock",
+      "method": "exact_frozen_source",
+      "sha256": "65e9a080705ba9513a7fcf62fad5e717c70eb85b03416d24ec75c05aa22da57c"
+    },
+    {
+      "path": "integrations/metaphysics-charting/chart.mjs",
+      "method": "exact_frozen_source",
+      "sha256": "63be043a13e6d1e410903ee480ba493b0d7649bffd4a906d917354b3c89874e4"
+    },
+    {
+      "path": "integrations/metaphysics-charting/check.mjs",
+      "method": "new_source_contracts_plus_standalone_test_binding",
+      "sha256": "d9bf7b3aa5b8b46bde01e33bddd9b31367c2d017964c209ab1ef68bb43d8e59a"
+    },
+    {
+      "path": "integrations/metaphysics-charting/render.mjs",
+      "method": "source_semantic_hunks_preserving_public_CHART_SHARP_MODULE",
+      "sha256": "b508bd6517fefea4eb21cef4d3df8360ee8ded2cbbdbee6a6bd2bb06258184f6"
+    },
+    {
+      "path": "integrations/mcp/scripts/install.py",
+      "method": "frozen_shared_config_preservation_guard_with_portable_recovery_text",
+      "sha256": "efa4f1a5ff24911e2d8fc2414ab34bd789ad1862dce9711442bc39ace3af268c"
+    },
+    {
+      "path": "toolbox.py",
+      "method": "add_finite_media_action_dispatch_only",
+      "sha256": "ae0a2646dc8f91c21dfef42fdb40c675b8f6d3eaf1a0b76c9523937e0af1cd70"
+    },
+    {
+      "path": "registry.json",
+      "method": "media_additive_action_and_source_contract",
+      "sha256": "3d9718ebefb577e59b37e214486bb915bd9ff8e18f8a1a77bfffbdc67947763b"
+    },
+    {
+      "path": "seal_portable.py",
+      "method": "nul_delimited_utf8_git_paths",
+      "sha256": "d39e2f04cf8d045762e68fdd9fac1b29f8a2cb3ac9ac2ae79d3fc5f485652b2e"
+    },
+    {
+      "path": "integrations/media/README.md",
+      "method": "portable_documentation",
+      "sha256": "60ab1e4e04565052d6f564db9c4104fb314f2f0a294086960c967f4edbf950d9"
+    },
+    {
+      "path": "integrations/knowledge-feedback/README.md",
+      "method": "document_resolved_contract",
+      "sha256": "d7e16c503fd7788ccec11960d23c7f09bacef52e2197cb643d7d33623850e74a"
+    },
+    {
+      "path": "integrations/bilibili-capture/README.md",
+      "method": "document_additive_budget_and_metadata",
+      "sha256": "6c455d72ac86bc49aa60ccd873af342b1b5f803425638d83c2ca83f26188534c"
+    },
+    {
+      "path": "integrations/metaphysics-charting/README.md",
+      "method": "document_explicit_corrected_clock_limit",
+      "sha256": "08814356b2720ff18b5f99bac5eca5a90e710b3c1293fa11f8853f196d89688a"
+    }
+  ],
+  "model_or_paid_calls": 0,
+  "network_validation_performed": false,
+  "runtime_and_account_validation": "recipient_required"
+}

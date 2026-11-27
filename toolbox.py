@@ -208,7 +208,7 @@ def launch(workflow,tool,action,args,base=BASE):
             if args:raise ValueError('Version accepts no arguments')
             cmd=[node,str(folder/'runtime/node_modules/rea-agents/scripts/rea.mjs'),'--version']
         else:cmd=[node,str(folder/'runtime/node_modules/rea-agents/scripts/rea.mjs'),'analyze-javascript-application',*args]
-    elif tool=='media':cmd=[sys.executable,'-X','utf8','-B',str(folder/('capture.py' if action=='capture' else 'ocr.py')),*args]
+    elif tool=='media':cmd=[sys.executable,'-X','utf8','-B',str(folder/{'capture':'capture.py','ocr':'ocr.py','body-candidate':'body_candidate.py'}[action]),*args]
     elif tool=='anatomy':
         if action not in ('status','restore','example'):raise ValueError('Unknown Anatomy action')
         cmd=[sys.executable,'-X','utf8','-B',str(folder/'anatomy.py'),action,*args]

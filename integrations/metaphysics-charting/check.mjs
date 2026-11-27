@@ -5,7 +5,7 @@ import {spawnSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 const root=path.dirname(fileURLToPath(import.meta.url));
 const cli=path.join(root,'chart.mjs');
-const host=path.resolve(root,'../../../Life/Metaphysics/scripts/chart.mjs');
+const host=cli; // Standalone calculation contract; no private host is required.
 const base=JSON.parse(fs.readFileSync(path.join(root,'example.synthetic.json'),'utf8'));
 const checks=[];
 function run(input, {program=cli,timezone='Etc/UTC',reject=false,offline=false}={}) {
@@ -24,7 +24,7 @@ test('runtime_integrity_without_engine_loading',()=>{
   const p=spawnSync(process.execPath,[host,'health'],{encoding:'utf8'});assert.equal(p.status,0,p.stderr);
   const h=JSON.parse(p.stdout);assert.equal(h.engine_loaded,false);assert.equal(h.files_checked,1057);
 });
-test('public_upstream_ziwei_fixture_through_life_host',()=>{
+test('public_upstream_ziwei_fixture_through_standalone_adapter',()=>{
   const r=run(base,{program:host});const a=r.charts.ziwei.native;
   assert.deepEqual(pillars(r),['庚辰','甲申','丙午','庚寅']);
   assert.equal(a.earthlyBranchOfSoulPalace,'午');assert.equal(a.earthlyBranchOfBodyPalace,'戌');
@@ -103,6 +103,22 @@ test('both_engines_and_transit_work_with_network_and_subprocess_blocked',()=>{
 test('unconfirmed_assumptions_are_not_user_preferences',()=>{
   assert.equal(run(base).status,'calculated_with_assumptions');
   assert.equal(run({...base,inputConfirmed:true,conventionsConfirmed:true}).status,'calculated_for_confirmed_input');
+});
+test('confirmed_corrected_solar_clock_preserves_identity_and_provisional_yun',()=>{
+  const r=run({...base,timeBasis:'true_solar_corrected',inputConfirmed:true});
+  const ordinary=run(base);
+  assert.equal(r.calendar.timeBasis,'true_solar_corrected');
+  assert.equal(r.calendar.trueSolarCorrectionApplied,false);
+  assert.equal(r.calendar.originalCivilInstantKnown,false);
+  assert.deepEqual(r.charts.bazi.pillars,ordinary.charts.bazi.pillars);
+  assert.deepEqual(r.charts.ziwei.native.palaces,ordinary.charts.ziwei.native.palaces);
+  assert.equal(r.charts.bazi.yun.precision,'provisional_corrected_clock_compared_with_UTC8_terms');
+  assert(r.warnings.includes('supplied_corrected_solar_clock_no_recalculation'));
+});
+test('corrected_solar_clock_needs_confirmation_and_jie_boundary_resolution',()=>{
+  assert.equal(run({...base,timeBasis:'true_solar_corrected'},{reject:true}),'corrected_solar_clock_requires_confirmed_solar_input');
+  const next=run(base).charts.bazi.adjacentJie.next.solar.split(' ');
+  assert.equal(run({...base,date:next[0],time:next[1],timeBasis:'true_solar_corrected',inputConfirmed:true},{reject:true}),'corrected_clock_near_jie_requires_original_civil_time');
 });
 for(const [name,change,code] of [
   ['invalid_solar_day',{date:'2000-02-31'},'invalid_solar_day'],

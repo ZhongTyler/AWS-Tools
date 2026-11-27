@@ -94,3 +94,7 @@ FLUX klein和CPU抠图维护组件随包保存固定版本与显式入口，权�
 安装只复制版本化源码。以上能力均不自动启动、注册服务、下载模型或启用账号；真实输入与接收方验证另行完成。
 
 统一入口示例：`python toolbox.py request --workflow knowledge-feedback --tool knowledge-feedback --action health` 只查看计划；`run` 才执行明确动作。排盘计算还须传入 `-- --chart-home <已恢复的外部目录>`；B站画面命令为 `frames`。也可直接按工具内 README 使用。
+
+[建包顺序与双层校验](docs/packaging-integrity.md)
+
+[2.1.0 变更与升级恢复](docs/release-2.1.0.md)

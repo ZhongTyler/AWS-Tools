@@ -56,10 +56,17 @@ class InstallerTests(unittest.TestCase):
         self.assertTrue(tomllib.loads(merged)['mcp_servers']['research-v2ex']['enabled'])
         self.assertFalse(tomllib.loads(merged)['mcp_servers']['research-zhihu']['enabled'])
 
-    def test_catalog_covered_and_rss_shared(self):
-        sources = json.loads((BASE.parents[1] / 'sources.json').read_text(encoding='utf-8'))['sources']
-        self.assertEqual(len(sources), 11)
-        self.assertEqual({s['mcp'] for s in sources}, set(self.names))
+    def test_preserve_controlled_shared_hn_and_rss(self):
+        for name in ['hn', 'rss']:
+            current = '[mcp_servers.research-' + name + ']\nhttp_headers_helper = "owned-helper"\n[mcp_servers.research-' + name + '-stdio-fallback]\ncommand = "owned-command"\n'
+            with self.assertRaisesRegex(ValueError, 'Controlled shared'):
+                module.merge(current, self.block, self.names)
+
+    def test_standalone_public_source_catalog(self):
+        expected = {'research-' + name for name in ['hn', 'juejin', 'rss', 'reddit', 'v2ex', 'github', 'huggingface', 'stackoverflow', 'lobsters', 'zhihu', 'xiaohongshu']}
+        self.assertEqual(set(self.names), expected)
+        rendered = tomllib.loads(module.merge('', self.block, self.names))['mcp_servers']
+        self.assertEqual(set(rendered), expected)
 
     def test_archives_match_recorded_content(self):
         module.verify_archives()

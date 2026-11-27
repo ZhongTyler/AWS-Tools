@@ -167,23 +167,33 @@ def storyboard(bvid,page=1,at=None,num=3,transport=platform,fetch=download):
             'sampling':'platform_storyboard_not_precise_decoded_frames','full_viewing':False,'access':r['access']},assets
 
 
-def audio(bvid,page=1,transport=platform,fetch=download):
+def duration_budget(value):
+    # Explicitly budget a longer public course part; retain all access/byte/time guards.
+    if isinstance(value,bool) or not isinstance(value,int) or not 600<=value<=3600:
+        raise ValueError('invalid_media_duration_budget')
+    return value
+
+
+def audio(bvid,page=1,transport=platform,fetch=download,max_duration_seconds=600):
+    budget=duration_budget(max_duration_seconds)
     r=transport('audio',bvid=bvid,page=page)
     if r['status']!='platform_read':return r,[]
-    if r['metadata']['duration']>600:raise ValueError('audio_over_10_minute_limit')
+    if r['metadata']['duration']>budget:raise ValueError('audio_over_10_minute_limit' if budget==600 else 'audio_over_duration_budget')
     tracks=r['data'].get('dash',{}).get('audio') or []
     if not tracks:return {'status':'public_audio_unavailable','metadata':r['metadata']},[]
     track=min(tracks,key=lambda x:x.get('bandwidth',float('inf')));url=track.get('baseUrl') or track.get('base_url')
     raw=fetch(url,'audio',40000000)
-    return {'status':'audio_captured','metadata':r['metadata'],'file':'audio.m4a','sha256':SHA(raw),'bytes':len(raw),'source_host':urllib.parse.urlsplit(url).hostname,'access':r['access']},[('audio.m4a',raw)]
+    return {'status':'audio_captured','metadata':r['metadata'],'file':'audio.m4a','sha256':SHA(raw),'bytes':len(raw),'source_host':urllib.parse.urlsplit(url).hostname,'access':r['access'],
+            'media_budget':{'max_duration_seconds':budget,'max_download_bytes':40000000,'duration_explicitly_extended':budget>600}},[('audio.m4a',raw)]
 
 
-def precise_frames(bvid,page=1,at=None,transport=platform,fetch=download):
+def precise_frames(bvid,page=1,at=None,transport=platform,fetch=download,max_duration_seconds=600):
+    budget=duration_budget(max_duration_seconds)
     if not isinstance(at,list) or not 1<=len(at)<=6 or any(isinstance(t,bool) or not isinstance(t,(int,float)) or not math.isfinite(t) or t<0 for t in at):raise ValueError('invalid_frame_times')
     r=transport('audio',bvid=bvid,page=page) # same guarded public playurl response contains video and audio
     if r['status']!='platform_read':return r,[]
     meta=r['metadata']
-    if meta['duration']>600 or max(at)>meta['duration']:raise ValueError('video_duration_or_seek_limit')
+    if meta['duration']>budget or max(at)>meta['duration']:raise ValueError('video_duration_or_seek_limit')
     tracks=[t for t in r['data'].get('dash',{}).get('video',[]) if 0<t.get('width',0)<=1920 and 0<t.get('height',0)<=1080]
     if not tracks:return {'status':'public_video_unavailable','metadata':meta},[]
     # Prefer readable 720p if publicly returned, without asking for a paid quality.
@@ -209,7 +219,8 @@ def precise_frames(bvid,page=1,at=None,transport=platform,fetch=download):
             name=f'frame-{i+1}.jpg';assets.append((name,jpg));frames.append({'file':name,'want_sec':want,'got_sec':got,'delta_sec':abs(want-got),'sha256':SHA(jpg),'bytes':len(jpg),'width':frame.width,'height':frame.height})
     return {'status':'decoded_frames_read_requires_visual_review','metadata':meta,'frames':frames,
             'source_video_sha256':SHA(raw),'source_video_bytes':len(raw),'source_video_id':best.get('id'),
-            'sampling':'decoded_video_frames_with_actual_pts','full_viewing':False,'access':r['access']},assets
+            'sampling':'decoded_video_frames_with_actual_pts','full_viewing':False,'access':r['access'],
+            'media_budget':{'max_duration_seconds':budget,'max_download_bytes':40000000,'duration_explicitly_extended':budget>600}},assets
 
 
 def save_new(folder,result,assets=()):
@@ -234,6 +245,7 @@ def main():
     p=argparse.ArgumentParser();p.add_argument('action',choices=['health','search','transcript','frames','precise-frames','audio'])
     p.add_argument('--bvid');p.add_argument('--page',type=int,default=1);p.add_argument('--language',default='zh');p.add_argument('--keyword');p.add_argument('--limit',type=int,default=5)
     p.add_argument('--at',type=float,nargs='+');p.add_argument('--num',type=int,default=3);p.add_argument('--output',type=Path)
+    p.add_argument('--max-duration-seconds',type=int,default=600,help='Explicit public audio/video budget, 600–3600s; byte/access/deadline limits stay fixed')
     a=p.parse_args();start=time.perf_counter()
     try:
         if a.output and a.output.exists():raise ValueError('output_already_exists')
@@ -244,8 +256,8 @@ def main():
             if not BV.fullmatch(a.bvid or '') or not 1<=a.page<=1000:raise ValueError('invalid_video_identity')
             if a.action=='transcript':r=transcript(a.bvid,a.page,a.language)
             elif a.action=='frames':r,assets=storyboard(a.bvid,a.page,a.at,a.num)
-            elif a.action=='precise-frames':r,assets=precise_frames(a.bvid,a.page,a.at)
-            else:r,assets=audio(a.bvid,a.page)
+            elif a.action=='precise-frames':r,assets=precise_frames(a.bvid,a.page,a.at,max_duration_seconds=a.max_duration_seconds)
+            else:r,assets=audio(a.bvid,a.page,max_duration_seconds=a.max_duration_seconds)
         r['elapsed_seconds']=round(time.perf_counter()-start,4)
         if a.output:save_new(a.output,r,assets)
         print(json.dumps(r,ensure_ascii=False))

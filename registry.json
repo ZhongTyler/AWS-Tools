@@ -55,12 +55,15 @@
       "status": "optional_recipient_validation_required",
       "actions": [
         "capture",
-        "ocr"
+        "ocr",
+        "body-candidate"
       ],
       "required_sources": [
         "capture.py",
         "ocr.py",
-        "requirements-windows-py312.lock"
+        "requirements-windows-py312.lock",
+        "body_candidate.py",
+        "requirements-body-candidate-windows-py312.lock"
       ],
       "required_runtime": [
         "runtime/bs4/__init__.py",

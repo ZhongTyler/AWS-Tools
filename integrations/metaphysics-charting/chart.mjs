@@ -60,8 +60,11 @@ export function calculate(input) {
   const date = parseDate(input.date), clock = parseTime(input.time);
   choices(input.calendar, ['solar','lunar'], 'calendar');
   choices(input.gender, ['male','female'], 'gender');
-  // Engines use naive wall-clock values and UTC+8 solar terms. No foreign/DST/solar-time guessing.
-  if (input.timezone !== 'UTC+08:00' || input.timeBasis !== 'civil_standard') fail('unsupported_time_basis_resolve_timezone_dst_or_solar_time_first');
+  // UTC+8 remains the calendar/solar-term reference. A supplied corrected clock
+  // is used verbatim, never converted or relabelled as a civil birth instant.
+  const correctedSolar = input.timeBasis === 'true_solar_corrected';
+  if (input.timezone !== 'UTC+08:00' || (!correctedSolar && input.timeBasis !== 'civil_standard')) fail('unsupported_time_basis_resolve_timezone_dst_or_solar_time_first');
+  if (correctedSolar && (input.calendar !== 'solar' || input.inputConfirmed !== true)) fail('corrected_solar_clock_requires_confirmed_solar_input');
   const leap = input.leapMonth === undefined ? false : boolean(input.leapMonth, 'leapMonth');
   if (input.calendar === 'lunar' && input.leapMonth === undefined) fail('lunar_leapMonth_flag_required');
   if (input.calendar === 'solar' && leap) fail('leapMonth_requires_lunar');
@@ -102,10 +105,17 @@ export function calculate(input) {
       : Lunar.fromYmdHms(date[0], leap ? -date[1] : date[1], date[2], ...clock).getSolar();
   } catch { fail('invalid_lunar_date_or_leap_month'); }
   const lunar = solar.getLunar();
+  if (correctedSolar) {
+    const adjacent = [lunar.getPrevJie(), lunar.getNextJie()];
+    if (adjacent.some(jie => Math.abs(solar.getJulianDay() - jie.getSolar().getJulianDay()) <= 1)) {
+      fail('corrected_clock_near_jie_requires_original_civil_time');
+    }
+  }
   if (solar.getYear() < 1900 || solar.getYear() > 2100) fail('converted_date_outside_supported_range');
   if (input.calendar === 'lunar' && (lunar.getYear() !== date[0] || Math.abs(lunar.getMonth()) !== date[1]
     || lunar.getDay() !== date[2] || (lunar.getMonth() < 0) !== leap)) fail('invalid_lunar_date_or_leap_month');
   const warnings = [];
+  if (correctedSolar) warnings.push('supplied_corrected_solar_clock_no_recalculation', 'corrected_clock_yun_provisional_without_civil_instant');
   if (!inputConfirmed) warnings.push('birth_input_not_confirmed');
   if (!conventionsConfirmed) warnings.push('conventions_are_explicit_calculation_assumptions_not_user_preferences');
   const result = {
@@ -114,7 +124,8 @@ export function calculate(input) {
     request: structuredClone(input),
     calendar: { solar: solar.toYmdHms(), lunar: { year: lunar.getYear(), month: Math.abs(lunar.getMonth()),
       day: lunar.getDay(), leapMonth: lunar.getMonth() < 0, display: lunar.toString() },
-      timezone: input.timezone, timeBasis: input.timeBasis, trueSolarCorrectionApplied: false, dstCorrectionApplied: false },
+      timezone: input.timezone, timeBasis: input.timeBasis, trueSolarCorrectionApplied: false, dstCorrectionApplied: false,
+      ...(correctedSolar ? {clockSource:'caller_confirmed_corrected_solar_clock', timezoneRole:'calendar_and_solar_term_reference_not_birth_timezone', originalCivilInstantKnown:false} : {}) },
     conventions: cfg,
     provenance: { adapter_version: 1, engines: check.engines,
       package_lock_sha256: read('source-lock.json').package_lock_sha256,
@@ -142,6 +153,7 @@ export function calculate(input) {
           startYear: x.getStartYear(), endYear: x.getEndYear(), startNominalAge: x.getStartAge(), endNominalAge: x.getEndAge(),
           annuals: x.getLiuNian().map(n => ({ year: n.getYear(), nominalAge: n.getAge(), ganzhi: n.getGanZhi() })) })) }
     };
+    if (correctedSolar) result.charts.bazi.yun.precision = 'provisional_corrected_clock_compared_with_UTC8_terms';
     if (clock[0] === 23) warnings.push('late_zi_bazi_day_and_hour_stem_conventions_must_be_read_together');
     const prev = lunar.getPrevJie(), next = lunar.getNextJie();
     result.charts.bazi.adjacentJie = { previous: { name: prev.getName(), solar: prev.getSolar().toYmdHms() },

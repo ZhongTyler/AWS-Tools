@@ -28,8 +28,10 @@ def peak_memory():
     fn=ctypes.windll.psapi.GetProcessMemoryInfo;fn.argtypes=[ctypes.c_void_p,ctypes.POINTER(Counters),ctypes.c_ulong]
     return c.PeakWorkingSetSize if fn(handle(),ctypes.byref(c),c.cb) else None
 
-def decode_local_pcm(raw):
+def decode_local_pcm(raw,max_duration_seconds=600):
     """Decode memory bytes only; media manifests cannot open network or local paths."""
+    if type(max_duration_seconds) is not int or not 600<=max_duration_seconds<=3600:
+        raise ValueError('invalid_media_duration_budget')
     import av
     import io
     import numpy as np
@@ -43,11 +45,11 @@ def decode_local_pcm(raw):
             if len(frame.layout.channels)>8:raise ValueError('media_channel_limit')
             for converted in resampler.resample(frame):
                 pcm=converted.to_ndarray().reshape(-1);samples+=len(pcm)
-                if samples>600*16000:raise ValueError('media_duration_over_10_minute_limit')
+                if samples>max_duration_seconds*16000:raise ValueError('media_duration_over_10_minute_limit' if max_duration_seconds==600 else 'media_duration_over_budget')
                 chunks.append(pcm)
         for converted in resampler.resample(None):
             pcm=converted.to_ndarray().reshape(-1);samples+=len(pcm)
-            if samples>600*16000:raise ValueError('media_duration_over_10_minute_limit')
+            if samples>max_duration_seconds*16000:raise ValueError('media_duration_over_10_minute_limit' if max_duration_seconds==600 else 'media_duration_over_budget')
             chunks.append(pcm)
     if not samples:raise ValueError('media_empty_audio')
     return np.concatenate(chunks).astype(np.float32)/32768.0

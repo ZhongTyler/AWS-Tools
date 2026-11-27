@@ -4,7 +4,7 @@ export const VERSION='knowledge-feedback-v1';
 const TYPES=['signal','issue','outcome_link','control'];
 const KINDS=['knowledge_gap','retrieval_gap','answer_omission','source_conflict','application_mismatch','transfer_candidate','cost_problem','unknown'];
 const PURPOSES=['lookup','research','application','authoring','maintenance','regression','technical'];
-const ISSUE_STATES=['triage','needs_evidence','ready_for_handoff','deferred','rejected','linked'];
+const ISSUE_STATES=['triage','needs_evidence','ready_for_handoff','deferred','rejected','linked','resolved'];
 const ID=/^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/;
 const fail=(code,message)=>{throw Object.assign(Error(message),{code});};
 const need=(v,m)=>{if(!v)fail('invalid_record',m);};
@@ -72,7 +72,7 @@ export function validateRecord(record){
   need(record.owner===null||typeof record.owner==='string'&&record.owner.trim(),'Invalid owner');
   text(record.next_action,'next_action');text(record.review_when,'review_when');need(ISSUE_STATES.includes(record.status),'Invalid issue status');
   refs(record.evidence,'evidence');refs(record.counterevidence,'counterevidence');
-  if(record.status==='linked')need(record.owner&&typeof record.handoff_ref==='string'&&record.handoff_ref.trim(),'Linked requires owner and authoritative handoff');
+  if(['linked','resolved'].includes(record.status))need(record.owner&&typeof record.handoff_ref==='string'&&record.handoff_ref.trim(),'Linked/resolved requires owner and authoritative handoff');
   if(record.increment!==undefined)increment(record.increment);
  }
  if(record.type==='outcome_link'){
@@ -157,7 +157,7 @@ export function selectIssues(state,{now,terms=[],limit=5}={}){
  need(Number.isFinite(now)&&Number.isSafeInteger(limit)&&limit>=0&&limit<=50,'Invalid selection budget');
  need(Array.isArray(terms)&&terms.every(t=>typeof t==='string'),'Invalid selection terms');
  if(!terms.length||!limit)return [];
- return Object.values(state.records.issue).filter(r=>!['rejected','deferred'].includes(r.status)&&eligibility(r.policy,now,r.expires_at)==='eligible'&&!state.tombstones[key('issue',r.id)]&&r.signal_ids.every(id=>state.records.signal[id]&&eligibility(state.records.signal[id].policy,now,state.records.signal[id].expires_at)==='eligible'))
+ return Object.values(state.records.issue).filter(r=>!['rejected','deferred','resolved'].includes(r.status)&&eligibility(r.policy,now,r.expires_at)==='eligible'&&!state.tombstones[key('issue',r.id)]&&r.signal_ids.every(id=>state.records.signal[id]&&eligibility(state.records.signal[id].policy,now,state.records.signal[id].expires_at)==='eligible'))
  .map(r=>({r,score:terms.filter(t=>t&&[r.subject,r.condition_key,r.increment?.trigger??''].some(v=>v.toLowerCase().includes(t.toLowerCase()))).length}))
  .filter(x=>x.score>0).sort((a,b)=>b.score-a.score||a.r.id.localeCompare(b.r.id)).slice(0,limit).map(({r})=>({id:r.id,category:r.category,owner:r.owner,status:r.status,subject:r.subject,condition_key:r.condition_key,next_action:r.next_action,handoff_ref:r.handoff_ref??null,increment:r.increment??null,review_when:r.review_when,scope:'candidate_requires_current_task_review',evidence:r.evidence,outcomes:Object.values(state.records.outcome_link).filter(o=>o.issue_id===r.id&&eligibility(o.policy,now,o.expires_at)==='eligible').map(o=>({id:o.id,validation_ref:o.validation_ref,affected:o.affected,versions:o.versions,evidence:o.evidence,result_ref:o.result_ref??null}))}));
 }

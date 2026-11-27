@@ -450,5 +450,8 @@
       "source_sha256": "8253e690b551b636f93fafec7805bd2c51aa0203d8271a6b9613285cbadf6977",
       "adapted": false
     }
-  ]
+  ],
+  "historical_snapshot": true,
+  "current_source_review": "docs/source-review.json",
+  "current_inventory": "module-files.json"
 }

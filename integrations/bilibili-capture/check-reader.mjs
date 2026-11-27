@@ -48,4 +48,20 @@ await test('wrong_part_cid_stops_before_network',async()=>{
   let n=0;const guard=makeGuard(async()=>{n++;return json({});},{bvid});guard.selectPart(123);
   await assert.rejects(()=>guard.fetch('https://api.bilibili.com/x/player/wbi/v2?bvid='+bvid+'&cid=124'));assert.equal(n,0);
 });
+await test('publication_time_preserved_without_extra_requests_or_update_guess',async()=>{
+  const r=await readVideo({bvid,page:1},{fetcher:async url=>{
+    assert(new URL(url).pathname.endsWith('/view'));
+    return json({...meta,data:{...meta.data,pubdate:1696500000}});
+  }});
+  assert.equal(r.status,'metadata_read');assert.equal(r.metadata.pubdate,1696500000);
+  assert.equal(r.metadata.published_at,new Date(1696500000*1000).toISOString());
+  assert.equal(r.metadata.content_updated_at,null);assert.equal(r.access.count,1);
+});
+await test('unknown_publication_stays_null_instead_of_access_date',async()=>{
+  for(const value of [undefined,0,-1,NaN,'1696500000',Number.MAX_SAFE_INTEGER]){
+    const r=await readVideo({bvid},{fetcher:async()=>json({...meta,data:{...meta.data,pubdate:value}})});
+    assert.equal(r.status,'metadata_read');assert.equal(r.metadata.pubdate,null);
+    assert.equal(r.metadata.published_at,null);assert.equal(r.metadata.content_updated_at,null);
+  }
+});
 console.log(JSON.stringify({status:'PASS_WITH_LIMITS',checks,network:false,synthetic:true,real_video_content_verified:false},null,2));

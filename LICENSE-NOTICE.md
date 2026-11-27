@@ -11,3 +11,5 @@ Decision-model adapters are original maintenance code under MIT; upstream source
 Anatomy by wheresryan22 is included as pinned MIT source. Its original license is preserved at integrations/anatomy/vendor/LICENSE.txt and inside the fixed archive. No maintainer research, examples derived from private projects, runtime or learning-effect claims are included.
 
 Bilibili strict-reader subset: @xzxzzx/bilibili-mcp 1.14.3, Apache-2.0, original license in vendor/reader/LICENSE; reviewed patches pinned by reader-lock.json. DSH helper archive and chart engines retain their MIT licenses in the fixed vendor archives and source notices. Original adapters and knowledge-feedback/collaboration tools use the package MIT license. No model weights or captured media are distributed.
+
+The optional local-HTML extractor references Trafilatura 2.3.1 by Adrien Barbaresi ([upstream](https://github.com/adbar/trafilatura)), Apache-2.0. Only the original adapter and a dependency version list are distributed here; Trafilatura and its transitive runtime are not bundled. Recipients retain their installed distributions' licenses and notices.

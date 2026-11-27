@@ -57,6 +57,22 @@ export class FileStore{
   }
  }
  select(options){return selectIssues(this.read(),options);}
+ /** Resolve only with an actual owner result and validation reference; evidence remains inspectable. */
+ resolveIssue({issueId,outcome,now}={}){
+  const state=this.read(),issue=state.records.issue[issueId];
+  requireValue(issue,'Unknown issue');
+  const row=validateRecord(outcome);
+  requireValue(row.type==='outcome_link'&&row.issue_id===issueId,'Outcome belongs to another issue');
+  requireValue(typeof row.validation_ref==='string'&&row.validation_ref.trim()&&typeof row.result_ref==='string'&&row.result_ref.trim(),'Resolution requires validation and owner result');
+  requireValue(row.evidence.adopted!==null||row.evidence.ingested!==null,'Resolution requires an evidenced change');
+  if(issue.status==='resolved'){
+   const prior=state.records.outcome_link[row.id];
+   requireValue(prior&&canonical(prior)===canonical(row),'Resolution differs from retained outcome');
+   return {status:'unchanged',persisted:false,cursor:state.cursor,results:[]};
+  }
+  const resolved={...issue,revision:issue.revision+1,status:'resolved',handoff_ref:row.result_ref,next_action:'Closed after owner validation; reopen only for new evidence',review_when:'new evidence for this condition'};
+  return this.apply([resolved,row],{now,expectedCursor:state.cursor});
+ }
  maintain({now,tombstone_retention_ms}={}){if(!fs.existsSync(this.file))return {status:'unchanged',persisted:false,cursor:0};return this.apply([],{now,retention:{tombstone_retention_ms}});}
  export({now,exportAllowed=false}={}){
   requireValue(exportAllowed===true,'Host-approved private export required');

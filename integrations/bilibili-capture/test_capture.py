@@ -58,6 +58,42 @@ class CaptureContracts(unittest.TestCase):
         with patch.object(c,'download') as f:
             with self.assertRaises(ValueError):c.audio(META['bvid'],transport=t)
             f.assert_not_called()
+    def test_explicit_long_audio_budget_is_bounded_and_receipted(self):
+        def t(*a,**k):return {'status':'platform_read','metadata':{**META,'duration':825},'data':{'dash':{'audio':[{'bandwidth':1,'baseUrl':'https://a.bilivideo.com/course.m4a'}]}},'access':[]}
+        seen=[]
+        def fetch(url,kind,cap):seen.append((kind,cap));return b'public_audio_fixture'
+        result,assets=c.audio(META['bvid'],transport=t,fetch=fetch,max_duration_seconds=900)
+        self.assertEqual(seen,[('audio',40000000)]);self.assertEqual(result['media_budget']['max_duration_seconds'],900)
+        self.assertEqual(result['metadata']['cid'],202);self.assertTrue(result['media_budget']['duration_explicitly_extended'])
+        self.assertEqual(assets[0][1],b'public_audio_fixture')
+        with self.assertRaisesRegex(ValueError,'audio_over_duration_budget'):
+            c.audio(META['bvid'],transport=t,fetch=fetch,max_duration_seconds=800)
+        self.assertEqual(len(seen),1)
+    def test_invalid_duration_budget_never_queries_platform(self):
+        for budget in [True,599,3601,900.0,None]:
+            with patch.object(c,'platform') as transport:
+                for action in [c.audio,c.precise_frames]:
+                    with self.assertRaisesRegex(ValueError,'invalid_media_duration_budget'):
+                        action(META['bvid'],transport=transport,max_duration_seconds=budget)
+                transport.assert_not_called()
+    def test_long_budget_does_not_retry_access_or_foreign_hosts(self):
+        with patch.object(c,'download') as fetch:
+            result,_=c.audio(META['bvid'],transport=lambda *a,**k:{'status':'stopped','reason':'upstream_http_412_no_retry'},max_duration_seconds=900)
+            self.assertEqual(result['reason'],'upstream_http_412_no_retry');fetch.assert_not_called()
+        with patch.object(c.urllib.request,'build_opener') as opener:
+            with self.assertRaisesRegex(ValueError,'media_host_denied'):
+                c.download('https://bilivideo.com.evil.test/course.m4a','audio',40000000)
+            opener.assert_not_called()
+    def test_long_pcm_requires_explicit_budget_and_stays_bounded(self):
+        import asr,wave
+        data=io.BytesIO()
+        with wave.open(data,'wb') as w:
+            w.setnchannels(1);w.setsampwidth(2);w.setframerate(16000);w.writeframes(b'\0'*(601*32000))
+        raw=data.getvalue()
+        with self.assertRaisesRegex(ValueError,'media_duration_over_10_minute_limit'):asr.decode_local_pcm(raw)
+        self.assertEqual(len(asr.decode_local_pcm(raw,max_duration_seconds=601)),601*16000)
+        for budget in [True,599,3601]:
+            with self.assertRaisesRegex(ValueError,'invalid_media_duration_budget'):asr.decode_local_pcm(raw,max_duration_seconds=budget)
     def test_precise_frame_invalid_time_and_duration_stop_before_media(self):
         for at in [None,[],[float('nan')],[-1],[0]*7]:
             with self.assertRaises(ValueError):c.precise_frames(META['bvid'],at=at)

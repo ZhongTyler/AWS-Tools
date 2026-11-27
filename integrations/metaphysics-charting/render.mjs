@@ -32,10 +32,12 @@ function header(s,r,title,details=true){
   if(details){
     s.text(48,139,`公历 ${r.calendar.solar}   ·   ${r.request.gender==='male'?'男':'女'}   ·   ${r.calendar.timezone}`,25);
     s.text(48,178,`农历 ${r.calendar.lunar.display}`,25);
-    s.text(48,216,'民用标准时 · 未作夏令时或真太阳时修正',22,{fill:colors.muted});
+    s.text(48,216,r.calendar.timeBasis==='true_solar_corrected'?'真太阳时（用户已校准）· 直接采用所给钟点；起运日期暂估':'民用标准时 · 未作夏令时或真太阳时修正',22,{fill:colors.muted});
   }
 }
 const warnLabels={
+  supplied_corrected_solar_clock_no_recalculation:'直接采用用户已校准真太阳时；UTC+8仅为历法交节参考',
+  corrected_clock_yun_provisional_without_civil_instant:'未给原始民用时刻，精确交运日期暂估',
   birth_input_not_confirmed:'出生资料尚未确认',
   conventions_are_explicit_calculation_assumptions_not_user_preferences:'当前口径是计算假设，尚非用户偏好',
   late_zi_bazi_day_and_hour_stem_conventions_must_be_read_together:'晚子时：日界切换与时干进日口径须一起核对',
@@ -166,7 +168,7 @@ export function ziweiSheet(r){
     `${r.request.gender==='male'?'男':'女'} · ${a.time} · ${r.calendar.timezone}`,
     `命宫 ${a.earthlyBranchOfSoulPalace} · 身宫 ${a.earthlyBranchOfBodyPalace}`,
     `命主 ${a.soul} · 身主 ${a.body} · ${a.fiveElementsClass}`,
-    '民用标准时；未作夏令/真太阳时修正',
+    r.calendar.timeBasis==='true_solar_corrected'?'真太阳时（用户已校准，直接采用）':'民用标准时；未作夏令/真太阳时修正',
     `换日：${cfg.dayDivide==='forward'?'晚子算来日':'晚子算当日'}`,
     `年界：${cfg.yearDivide==='normal'?'正月初一':'立春日期（非交节瞬间）'}`,
     `安星：${cfg.algorithm==='default'?'通行版本':'中州版本'}`,

@@ -7,3 +7,7 @@ The strict anonymous reader is a reviewed subset of @xzxzzx/bilibili-mcp 1.14.3,
 ASR is optional and separate from subtitle reading. The fixed requirements and model lock describe a separately prepared Python environment and model; neither models nor installed dependencies are bundled or downloaded by package installation. A model file must already be present in an explicitly selected external `BILI_CAPTURE_HOME`. Audio content and transcripts remain user-owned outputs; recording permission and source conditions still apply.
 
 `server.py` is an optional stdio MCP entry, requiring the separately prepared MCP dependency and an explicit absolute external BILI_CAPTURE_HOME. Its input scope defaults to that home; widen only through an explicit BILI_CAPTURE_INPUT_ROOT. Installing this package does not register MCP, start a server, log in or enable ASR. Synthetic tests cover source identity and failure boundaries; a recipient's live video/network and listening validation remain separate.
+
+## Explicit duration budget and publication time
+
+Audio and precise frames default to 600 seconds. `--max-duration-seconds 600..3600` explicitly extends that bound; the 40,000,000-byte cap, access guards and deadlines remain unchanged. ASR decoding accepts the same explicit duration parameter, without installing or calling a model. Metadata retains platform `pubdate` and UTC `published_at`; unknown values and `content_updated_at` remain null. A publication timestamp does not prove the content update date.

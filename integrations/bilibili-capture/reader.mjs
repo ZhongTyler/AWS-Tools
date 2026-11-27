@@ -51,7 +51,10 @@ export async function readVideo({bvid,page=1,transcript=false},{fetcher=globalTh
     const part=meta.pages?.find(p=>p.page===page);
     if(!part)throw Error('requested_part_not_in_metadata');
     guard.selectPart(part.cid);
+    // Preserve the platform publication time without inventing content update dates.
+    const pubdate=Number.isSafeInteger(meta.pubdate)&&meta.pubdate>0&&meta.pubdate<=253402300799?meta.pubdate:null;
     const base={bvid,page,cid:part.cid,title:meta.title,author:meta.owner.name,part:part.part,duration:part.duration,
+      pubdate,published_at:pubdate===null?null:new Date(pubdate*1000).toISOString(),content_updated_at:null,
       url:'https://www.bilibili.com/video/'+bvid+'/?p='+page,source_kind:'platform_metadata_not_video_content'};
     if(!transcript)return {status:'metadata_read',metadata:base,access:guard.state(),frames_read:false,persisted:false};
     const subtitles=await api.getVideoSubtitle(bvid,part.cid),tracks=subtitles.subtitle.subtitles;

@@ -60,6 +60,11 @@ def render(runtime, node, servers):
 
 
 def merge(current, block, owned):
+    previous_servers = tomllib.loads(current).get('mcp_servers', {})
+    for profile in ('hn', 'rss'):
+        if (previous_servers.get('research-'+profile, {}).get('http_headers_helper')
+                and 'research-'+profile+'-stdio-fallback' in previous_servers):
+            raise ValueError('Controlled shared '+profile.upper()+' is active; preserve it or use the owning runtime rollback before applying defaults.')
     if current.count(BEGIN) != current.count(END) or current.count(BEGIN) > 1:
         raise ValueError('Malformed managed block; preserve config and inspect manually.')
     outside = re.sub(re.escape(BEGIN) + r'.*?' + re.escape(END) + r'\r?\n?', '', current, flags=re.S)
