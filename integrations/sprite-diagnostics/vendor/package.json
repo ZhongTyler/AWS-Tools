@@ -1,0 +1,84 @@
+{
+  "name": "@ludoai/cli",
+  "version": "0.4.2",
+  "description": "Ludo AI from the command line, for humans and coding agents: generate game sprites, animations, 3D models, video and audio, plus 32 free offline toolbox tools (spritesheet slicing, feet pivots, colliders, Godot/Unity/Phaser export, palettes, tilesets, audio checks).",
+  "keywords": [
+    "ludo",
+    "ludo-ai",
+    "game-assets",
+    "game-development",
+    "gamedev",
+    "sprites",
+    "spritesheet",
+    "pixel-art",
+    "sprite-animation",
+    "3d-models",
+    "sound-effects",
+    "game-music",
+    "godot",
+    "unity",
+    "cli",
+    "ai",
+    "agents",
+    "agent-skills",
+    "claude-code",
+    "codex",
+    "cursor",
+    "gemini-cli",
+    "mcp",
+    "toolbox",
+    "spritesheet-slicer",
+    "sprite-sheet",
+    "sprite-pivot",
+    "collision-box",
+    "tileset",
+    "texture-atlas",
+    "texturepacker",
+    "aseprite",
+    "phaser",
+    "pixijs",
+    "godot4",
+    "game-audio",
+    "loudness",
+    "glb",
+    "gltf",
+    "pixel-art-tools",
+    "free"
+  ],
+  "homepage": "https://ludo.ai/developers/cli",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Ludo-AI/ludo-cli.git"
+  },
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "ludo": "dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "spec",
+    "skills",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\" && tsc -p tsconfig.json",
+    "test": "npm run build && node --test --import ./test/isolate.mjs",
+    "sync-spec": "node scripts/sync-spec.mjs",
+    "prepublishOnly": "npm test",
+    "version": "node scripts/sync-manifest-versions.mjs && git add .claude-plugin/plugin.json .cursor-plugin/plugin.json gemini-extension.json"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.4",
+    "gltf-validator": "2.0.0-dev.3.10",
+    "phaser": "4.2.1",
+    "phaser3": "npm:phaser@3.90.0",
+    "pixi.js": "8.22.0",
+    "playwright-core": "1.64.1",
+    "typescript": "^5.9.3"
+  }
+}

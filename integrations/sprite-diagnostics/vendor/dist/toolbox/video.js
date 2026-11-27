@@ -1,0 +1,195 @@
+import { spawnSync } from "node:child_process";
+import fs from "node:fs";
+import path from "node:path";
+import { because, CliError, EXIT } from "../errors.js";
+const exe = (name) => (process.platform === "win32" ? `${name}.exe` : name);
+// Where the usual installers put ffmpeg. A coding agent's shell often has a
+// shorter PATH than the person's terminal (no Homebrew folder), and on Windows
+// an install reaches only the terminals opened after it.
+function installDirs() {
+    const env = process.env;
+    if (process.platform === "win32") {
+        return [
+            env.LOCALAPPDATA && path.join(env.LOCALAPPDATA, "Microsoft", "WinGet", "Links"),
+            env.USERPROFILE && path.join(env.USERPROFILE, "scoop", "shims"),
+            env.ProgramData && path.join(env.ProgramData, "chocolatey", "bin"),
+            env.ProgramFiles && path.join(env.ProgramFiles, "ffmpeg", "bin"),
+            "C:\\ffmpeg\\bin"
+        ].filter((d) => !!d);
+    }
+    if (process.platform === "darwin")
+        return ["/opt/homebrew/bin", "/usr/local/bin", "/opt/local/bin"];
+    return ["/usr/bin", "/usr/local/bin", "/snap/bin", "/home/linuxbrew/.linuxbrew/bin"];
+}
+const works = (cmd) => {
+    try {
+        return spawnSync(cmd, ["-version"], { timeout: 15_000, windowsHide: true }).status === 0;
+    }
+    catch {
+        return false;
+    }
+};
+// LUDO_FFMPEG names the binary outright, and then nothing else is tried
+// (ffprobe is the one beside it, or LUDO_FFPROBE). Otherwise the PATH, then
+// the installers' folders.
+const found = new Map();
+function tool(name) {
+    const known = found.get(name);
+    if (known !== undefined)
+        return known;
+    const ffmpeg = process.env.LUDO_FFMPEG;
+    const pinned = name === "ffmpeg" ? ffmpeg : process.env.LUDO_FFPROBE || (ffmpeg && (path.basename(ffmpeg) === ffmpeg ? "ffprobe" : path.join(path.dirname(ffmpeg), exe("ffprobe"))));
+    let hit;
+    if (pinned)
+        hit = works(pinned) ? pinned : null;
+    else if (works(name))
+        hit = name;
+    else
+        hit =
+            installDirs()
+                .map(d => path.join(d, exe(name)))
+                .find(f => fs.existsSync(f) && works(f)) ?? null;
+    found.set(name, hit);
+    return hit;
+}
+// `ffmpeg` and `ffprobe` run from wherever they were found.
+export const run = (cmd, args, input) => spawnSync((cmd === "ffmpeg" || cmd === "ffprobe" ? tool(cmd) : null) ?? cmd, args, { input, maxBuffer: 2 ** 31, timeout: 10 * 60_000, windowsHide: true });
+export function haveFfmpeg() {
+    return !!tool("ffmpeg") && !!tool("ffprobe");
+}
+export const FFMPEG_INSTALL = process.platform === "darwin" ? "brew install ffmpeg" : process.platform === "win32" ? "winget install ffmpeg" : "sudo apt install ffmpeg (or your system's package)";
+export function needFfmpeg(what = "Video", otherwise) {
+    if (haveFfmpeg())
+        return;
+    throw because("no-ffmpeg", new CliError(`${what} needs ffmpeg, which was not found (ffmpeg and ffprobe, on the PATH or where installers put them)`, EXIT.BAD_INPUT, `Install it: ${FFMPEG_INSTALL}${otherwise ? `; or ${otherwise}` : ""}. Installed somewhere else? Set LUDO_FFMPEG to the ffmpeg binary.`));
+}
+const rate = (r) => {
+    const [a, b = "1"] = (r ?? "").split("/");
+    const v = Number(a) / Number(b);
+    return Number.isFinite(v) && v > 0 ? v : 0;
+};
+export function probeVideo(file) {
+    const res = run("ffprobe", ["-v", "error", "-select_streams", "v:0", "-show_entries", "stream=width,height,r_frame_rate,avg_frame_rate,codec_name:stream_tags=alpha_mode:format=duration", "-of", "json", file]);
+    let info;
+    try {
+        info = JSON.parse(res.stdout.toString());
+    }
+    catch {
+        info = {};
+    }
+    const s = info.streams?.[0];
+    if (res.status !== 0 || !s?.width || !s.height)
+        throw because("not-a-video", new CliError(`Cannot read ${file} as a video: ${res.stderr.toString().trim().split("\n").pop() || "ffprobe found no video stream"}`, EXIT.BAD_INPUT));
+    return {
+        width: s.width,
+        height: s.height,
+        fps: rate(s.avg_frame_rate) || rate(s.r_frame_rate) || 30,
+        duration: Number(info.format?.duration) || 0,
+        codec: s.codec_name ?? "",
+        alpha: /^(vp8|vp9)$/.test(s.codec_name ?? "") && s.tags?.alpha_mode === "1"
+    };
+}
+// The frame size to decode at, so that all the frames together stay within
+// maxPixels (they end up in one sheet). A width the caller chose is kept, and
+// refused when it is too much. With none chosen, frames that would go over are
+// shrunk to fit, down to MIN_FIT_WIDTH: below that the clip is simply too long
+// for a sheet and the caller has to say which part of it they want.
+const MIN_FIT_WIDTH = 256;
+const heightAt = (info, width) => Math.max(2, Math.round((info.height * width) / info.width / 2) * 2);
+export function fitFrames(info, opts) {
+    const w = opts.width ?? info.width;
+    const h = opts.width ? heightAt(info, opts.width) : info.height;
+    const fps = opts.fps ?? info.fps;
+    const seconds = opts.duration ?? Math.max(0, (info.duration || 0) - (opts.start ?? 0));
+    const count = Math.ceil(seconds * fps + 1);
+    // A container that does not say how long it is cannot be sized up front.
+    if (!seconds || w * h * count <= opts.maxPixels)
+        return { width: w, height: h, shrunk: false };
+    if (!opts.width) {
+        let fw = Math.floor(Math.sqrt((opts.maxPixels / count) * (info.width / info.height)) / 2) * 2;
+        while (fw >= MIN_FIT_WIDTH && fw * heightAt(info, fw) * count > opts.maxPixels)
+            fw -= 2;
+        if (fw >= MIN_FIT_WIDTH)
+            return { width: fw, height: heightAt(info, fw), shrunk: true };
+    }
+    // What would fit, as flags to copy: the seconds that fit at this size.
+    const fits = Math.floor(((Math.floor(opts.maxPixels / (w * h)) - 1) / fps) * 10) / 10;
+    const smaller = opts.width ? "a smaller --width" : `--width ${MIN_FIT_WIDTH}`;
+    throw because("too-big", new CliError(`${Math.ceil(seconds * fps)} frames of ${w}x${h} would be over ${opts.maxPixels / 1024 / 1024} megapixels`, EXIT.USAGE, `Take fewer frames (--fps, --start, --duration) or smaller ones (--width). ${fits >= 0.1 ? `At ${w}x${h} and ${Math.round(fps * 100) / 100} fps, ${fits} s fit: --duration ${fits}` : `Try ${smaller} with a short --duration`}.`));
+}
+// The frames as RGBA, after ffmpeg's fps and scale filters, at the size
+// fitFrames gives.
+export function decodeVideo(file, info, opts) {
+    const { width: w, height: h } = fitFrames(info, opts);
+    const scaled = w !== info.width || h !== info.height;
+    const fps = opts.fps ?? info.fps;
+    const filters = [`fps=${fps}`, ...(scaled ? [`scale=${w}:${h}:flags=lanczos`] : [])];
+    const args = [
+        "-v",
+        "error",
+        // ffmpeg's own VP8/VP9 decoders drop alpha; libvpx keeps it.
+        ...(info.alpha ? ["-c:v", info.codec === "vp8" ? "libvpx" : "libvpx-vp9"] : []),
+        ...(opts.start ? ["-ss", String(opts.start)] : []),
+        ...(opts.duration ? ["-t", String(opts.duration)] : []),
+        "-i",
+        file,
+        "-vf",
+        filters.join(","),
+        "-f",
+        "rawvideo",
+        "-pix_fmt",
+        "rgba",
+        "pipe:1"
+    ];
+    const res = run("ffmpeg", args);
+    if (res.status !== 0)
+        throw because("decode-failed", new CliError(`ffmpeg could not decode ${file}: ${res.stderr.toString().trim().split("\n").pop()}`, EXIT.BAD_INPUT));
+    const size = w * h * 4;
+    const out = [];
+    for (let o = 0; o + size <= res.stdout.length; o += size)
+        out.push({ width: w, height: h, rgba: new Uint8Array(res.stdout.subarray(o, o + size)) });
+    if (!out.length)
+        throw because("no-frames", new CliError(`${file} gave no frames${opts.start ? ` after ${opts.start} s` : ""}`, EXIT.BAD_INPUT));
+    return out;
+}
+export const VIDEO_FORMATS = ["webm", "mp4", "mov"];
+// The encoder settings per format: WebM is VP9 with alpha, MOV ProRes 4444
+// with alpha (editors), MP4 H.264 on a background (it has no alpha) at even
+// sizes (4:2:0 needs them).
+export function encodeVideo(frames, fps, format, file, background) {
+    let [w, h] = [frames[0].width, frames[0].height];
+    let raw;
+    if (format === "mp4") {
+        const [ew, eh] = [w + (w % 2), h + (h % 2)];
+        raw = Buffer.alloc(ew * eh * 4 * frames.length);
+        frames.forEach((f, k) => {
+            const base = k * ew * eh * 4;
+            for (let y = 0; y < eh; y++) {
+                for (let x = 0; x < ew; x++) {
+                    const o = base + (y * ew + x) * 4;
+                    const inside = x < w && y < h;
+                    const i = (y * w + x) * 4;
+                    const a = inside ? f.rgba[i + 3] / 255 : 0;
+                    for (let c = 0; c < 3; c++)
+                        raw[o + c] = Math.round((inside ? f.rgba[i + c] : 0) * a + background[c] * (1 - a));
+                    raw[o + 3] = 255;
+                }
+            }
+        });
+        [w, h] = [ew, eh];
+    }
+    else {
+        raw = Buffer.concat(frames.map(f => Buffer.from(f.rgba.buffer, f.rgba.byteOffset, f.rgba.length)));
+    }
+    const codec = {
+        webm: ["-c:v", "libvpx-vp9", "-pix_fmt", "yuva420p", "-b:v", "0", "-crf", "24", "-row-mt", "1", "-auto-alt-ref", "0"],
+        mp4: ["-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "18", "-preset", "slow", "-movflags", "+faststart"],
+        mov: ["-c:v", "prores_ks", "-profile:v", "4444", "-pix_fmt", "yuva444p10le", "-vendor", "apl0"]
+    };
+    const res = run("ffmpeg", ["-v", "error", "-y", "-f", "rawvideo", "-pix_fmt", "rgba", "-s", `${w}x${h}`, "-r", String(fps), "-i", "pipe:0", ...codec[format], file], raw);
+    if (res.status !== 0) {
+        const why = res.stderr.toString().trim().split("\n").pop() ?? "";
+        throw because("encode-failed", new CliError(`ffmpeg could not write ${file}: ${why}`, EXIT.BAD_INPUT, /Unknown encoder/.test(why) ? "This ffmpeg was built without that encoder; try another --format." : undefined));
+    }
+    return { width: w, height: h };
+}

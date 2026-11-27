@@ -452,6 +452,6 @@
     }
   ],
   "historical_snapshot": true,
-  "current_source_review": "docs/source-review.json",
+  "current_source_review": "docs/source-review-2.2.0.json",
   "current_inventory": "module-files.json"
 }

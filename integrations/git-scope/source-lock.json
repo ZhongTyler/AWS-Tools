@@ -1,0 +1,13 @@
+{
+  "repository": "https://github.com/oil-oil/oil-dev-skills",
+  "revision": "9bcd9000cfd08ef40546420f403e04a4df1c31f2",
+  "source": "skills/oil-code-review/scripts/review_helper.py",
+  "upstream_sha256": "d4101b68dfc32f200bf849beef70a4e0447730f71d3e81cc0c5503ac5ef5890e",
+  "license": "MIT",
+  "license_sha256": "d44a3ca218007a85d3be41a0b76553d746e42336c7a63c6c6687d2619199c3c4",
+  "research_patch_sha256": "9a6f70eaab9890a0f8e199219f5135b40f80f52485d28d04f6aa40c9268c4de3",
+  "source_windows_worktree_license_sha256": "1e8782bdb3aeb9dc734ea716797f676072d3bdefed117abd67fc48d73583323d",
+  "tools_source_commit": "2cc7e26b23c725a175a4fd153d375d737914c55c",
+  "tools_adapter_sha256": "bbd101c27f3298b4148d060704c748d00f975c454b75dc1a483f7cf2f6b7861e",
+  "scope": "Only the read-only review helper and contract tests; other Oil Dev methods are not bundled"
+}

@@ -37,3 +37,7 @@ The [AWS overview](https://github.com/ZhongTyler/AgentWorkSpace) presents the fu
 [Packaging order and dual integrity](docs/packaging-integrity.md)
 
 [2.1.0 changes and upgrade/recovery](docs/release-2.1.0.md)
+
+[2.2.0 Git scope preflight and upgrade/recovery](docs/release-2.2.0.md) · [git-scope](integrations/git-scope/README.md)
+
+Tools 2.2.0: **17 tools / 15 optional workflows**. [git-scope](integrations/git-scope/README.md) · [sprite-diagnostics](integrations/sprite-diagnostics/README.md) · [demo-support](integrations/demo-support/README.md).

@@ -137,6 +137,37 @@
         "collaboration-checks"
       ],
       "default_path": "Use the existing host workflow or the integration README; no implicit setup or invocation"
+    },
+    {
+      "id": "code-review",
+      "owner": "Recipient host",
+      "entry": "integrations/git-scope/README.md",
+      "stage": "optional_host_binding_required",
+      "tools": [
+        "git-scope",
+        "collaboration-checks"
+      ],
+      "default_path": "Original review and Git commands; collect only when a scoped preflight helps"
+    },
+    {
+      "id": "sprite-diagnostics",
+      "owner": "Recipient host",
+      "entry": "integrations/sprite-diagnostics/README.md",
+      "stage": "optional_host_binding_required",
+      "tools": [
+        "sprite-diagnostics"
+      ],
+      "default_path": "Original asset/demo process; no automatic adoption or runtime setup"
+    },
+    {
+      "id": "demo-support",
+      "owner": "Recipient host",
+      "entry": "integrations/demo-support/README.md",
+      "stage": "optional_host_binding_required",
+      "tools": [
+        "demo-support"
+      ],
+      "default_path": "Original asset/demo process; no automatic adoption or runtime setup"
     }
   ]
 }

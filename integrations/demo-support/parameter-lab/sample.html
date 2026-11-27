@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>参数与复现准备样例</title>
+<style>
+body { margin: 32px; background: #17242b; color: #edf4f3; font: 16px/1.6 system-ui; }
+main { max-width: 1000px; margin: auto; }
+.workspace { display: flex; gap: 24px; flex-wrap: wrap; align-items: start; }
+canvas { max-width: 100%; background: #223840; border-radius: 12px; }
+button { padding: 8px 16px; margin: 12px 8px 12px 0; cursor: pointer; }
+#lab { min-height: 230px; }
+pre { white-space: pre-wrap; }
+</style>
+<main>
+<h1>参数与复现准备样例</h1>
+<p>配置和场景分别恢复。调参基线恢复后，当前执行步数继续保留。</p>
+<div class="workspace"><section><canvas width="600" height="280"></canvas><br>
+<button id="step">执行一步</button><button id="restart">重开场景</button>
+<pre id="state"></pre></section><aside id="lab"></aside></div>
+</main>
+<script type="module" src="./sample.mjs"></script>
+</html>

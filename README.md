@@ -98,3 +98,7 @@ FLUX klein和CPU抠图维护组件随包保存固定版本与显式入口，权�
 [建包顺序与双层校验](docs/packaging-integrity.md)
 
 [2.1.0 变更与升级恢复](docs/release-2.1.0.md)
+
+[2.2.0 Git 范围预检与升级恢复](docs/release-2.2.0.md) · [git-scope](integrations/git-scope/README.md)
+
+当前版本共 **17项工具、15条可选workflow**。新增 [Git范围预检](integrations/git-scope/README.md)、[精灵图离线检查](integrations/sprite-diagnostics/README.md)、[Demo参数与音频配套](integrations/demo-support/README.md)。

@@ -13,3 +13,7 @@ Anatomy by wheresryan22 is included as pinned MIT source. Its original license i
 Bilibili strict-reader subset: @xzxzzx/bilibili-mcp 1.14.3, Apache-2.0, original license in vendor/reader/LICENSE; reviewed patches pinned by reader-lock.json. DSH helper archive and chart engines retain their MIT licenses in the fixed vendor archives and source notices. Original adapters and knowledge-feedback/collaboration tools use the package MIT license. No model weights or captured media are distributed.
 
 The optional local-HTML extractor references Trafilatura 2.3.1 by Adrien Barbaresi ([upstream](https://github.com/adbar/trafilatura)), Apache-2.0. Only the original adapter and a dependency version list are distributed here; Trafilatura and its transitive runtime are not bundled. Recipients retain their installed distributions' licenses and notices.
+
+Git scope collector: Oil Dev Skills by oil-oil, pinned commit 9bcd9000cfd08ef40546420f403e04a4df1c31f2, MIT. Original license is preserved at integrations/git-scope/LICENSE. Only the reviewed helper is adapted; no other upstream Skill is distributed in this Tools batch.
+
+Sprite diagnostics preserves @ludoai/cli 0.4.2 original MIT code/license at integrations/sprite-diagnostics/vendor/LICENSE. Only finite offline operations are exposed. Demo support preserves lil-gui 0.21.0 MIT original and license at integrations/demo-support/parameter-lab/vendor/LICENSE; original adapter/audio code uses the package MIT grant. No private sample assets, audio, accounts or online-service rights are granted by these source licenses.

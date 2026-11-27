@@ -1,0 +1,11 @@
+{
+  "output": "standalone.html",
+  "bytes": 86846,
+  "sha256": "89147b25face935ab317591c05f9f20362fcd2e48a33a2115755e9219bd4cf81",
+  "library": {
+    "name": "lil-gui",
+    "version": "0.21.0",
+    "license": "MIT",
+    "sha256": "5b5a58e43dd6690f4a7b9bb3dd3caf7c58430a793855c9be8f3323bed94cc5a7"
+  }
+}

@@ -1,0 +1,56 @@
+{
+  "schema_version": 1,
+  "version": "1.0.0",
+  "provenance": {
+    "tools_source_commit": "2cc7e26b23c725a175a4fd153d375d737914c55c",
+    "scope": "Reusable support implementation only; private project and research receipts excluded"
+  },
+  "upstream": {
+    "name": "lil-gui",
+    "version": "0.21.0",
+    "license": "MIT",
+    "license_path": "parameter-lab/vendor/LICENSE"
+  },
+  "files": [
+    {
+      "path": "parameter-lab/parameter-lab.mjs",
+      "sha256": "749271cc3578cc0c01798983af2f55c5bd0bd494e06c223bdbcb162bf7f11a2c"
+    },
+    {
+      "path": "parameter-lab/vendor/lil-gui.esm.js",
+      "sha256": "5b5a58e43dd6690f4a7b9bb3dd3caf7c58430a793855c9be8f3323bed94cc5a7"
+    },
+    {
+      "path": "parameter-lab/vendor/LICENSE",
+      "sha256": "8cf4a9691239b14c715613ed8e41580d18ee433c862e263058393b35be6c8e53"
+    },
+    {
+      "path": "parameter-lab/sample.mjs",
+      "sha256": "0149b5eedb19d9fc62799c38d1080c7def1dc49125b7d39f290cf0789219876e"
+    },
+    {
+      "path": "parameter-lab/sample.html",
+      "sha256": "001bbb14326bf9f2714716df957118292a44f4f764d916de3338682fc9163540"
+    },
+    {
+      "path": "parameter-lab/build.cjs",
+      "sha256": "57bcb1b0b59ce5115d5a54d68afd67e67f1f28cc0b405ddb59bf39a05e996ebd"
+    },
+    {
+      "path": "parameter-lab/build.json",
+      "sha256": "1179e4333c2813a5bb147d877145c83883cb6939f03ee1afe30135d267fe11b1"
+    },
+    {
+      "path": "parameter-lab/standalone.html",
+      "sha256": "89147b25face935ab317591c05f9f20362fcd2e48a33a2115755e9219bd4cf81"
+    },
+    {
+      "path": "audio-loop/prepare.py",
+      "sha256": "589867c04693627d8df6ab0310c318ae25a7515f007b25bfe470f1b451d0b078"
+    },
+    {
+      "path": "audio-loop/player-template.html",
+      "sha256": "aece2ecbb3b1e0d9424bbdc802b64527d818ecbbbc816eae1fb0fb79cc31f22e"
+    }
+  ]
+}

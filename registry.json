@@ -275,6 +275,72 @@
       "required_sources": [],
       "required_runtime": [],
       "limits": "Read-only actual-input checks; no policy or permission authority"
+    },
+    {
+      "id": "git-scope",
+      "root": "integrations/git-scope",
+      "maintenance": "README.md",
+      "status": "optional_recipient_validation_required",
+      "actions": [
+        "collect"
+      ],
+      "required_sources": [
+        "review_helper.py",
+        "source-lock.json",
+        "LICENSE",
+        "test_contract.py"
+      ],
+      "required_runtime": [],
+      "limits": "Read-only path preflight for Git review. Rename endpoints and gitlinks are reported. Path matches do not establish ownership, authorization, or parent closure."
+    },
+    {
+      "id": "sprite-diagnostics",
+      "root": "integrations/sprite-diagnostics",
+      "maintenance": "README.md",
+      "status": "optional_recipient_validation_required",
+      "actions": [
+        "guide",
+        "health",
+        "metrics",
+        "loop",
+        "slice",
+        "export"
+      ],
+      "required_sources": [
+        "run.py",
+        "offline.mjs",
+        "upstream-lock.json",
+        "vendor/LICENSE",
+        "test_contract.py"
+      ],
+      "required_runtime": [],
+      "limits": "Fixed Ludo0.4.2 offline CPU PNG metrics/loop/slice/simple Godot export; Node24+ and Pillow explicitly supplied. No online commands, Studio or artwork acceptance."
+    },
+    {
+      "id": "demo-support",
+      "root": "integrations/demo-support",
+      "maintenance": "README.md",
+      "status": "optional_recipient_validation_required",
+      "actions": [
+        "guide",
+        "health"
+      ],
+      "required_sources": [
+        "source-lock.json",
+        "health.py",
+        "parameter-lab/parameter-lab.mjs",
+        "parameter-lab/vendor/lil-gui.esm.js",
+        "parameter-lab/vendor/LICENSE",
+        "parameter-lab/sample.mjs",
+        "parameter-lab/sample.html",
+        "parameter-lab/build.cjs",
+        "parameter-lab/build.json",
+        "parameter-lab/standalone.html",
+        "audio-loop/prepare.py",
+        "audio-loop/player-template.html"
+      ],
+      "required_runtime": [],
+      "limits": "Reusable numeric parameter adapter and existing-audio processing only; fixed source health; Node/browser or separately configured NumPy/SoundFile. Project owns settings, state and listening acceptance."
     }
   ]
 }

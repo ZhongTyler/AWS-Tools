@@ -1,0 +1,372 @@
+import { GLOBAL_FLAGS } from "./args.js";
+import { GROUP_INFO, groupsOf, SAVED_ANSWERS, savesFiles } from "./commands.js";
+import { VERSION } from "./config.js";
+import { TOOLS, toolboxSummary } from "./toolbox/index.js";
+const WIDTH = Math.min(process.stdout.columns || 100, 110);
+function wrap(text, indent, width = WIDTH) {
+    const words = text.split(/\s+/).filter(Boolean);
+    const lines = [];
+    let line = "";
+    for (const w of words) {
+        if (line && line.length + 1 + w.length > width - indent) {
+            lines.push(line);
+            line = w;
+        }
+        else {
+            line = line ? `${line} ${w}` : w;
+        }
+    }
+    if (line)
+        lines.push(line);
+    return lines.map(l => " ".repeat(indent) + l).join("\n");
+}
+function table(rows, indent = 2) {
+    const col = Math.min(Math.max(...rows.map(r => r[0].length), 0) + 2, 34);
+    return rows
+        .map(([left, right]) => {
+        const pad = left.length + 2 > col ? "\n" + " ".repeat(indent + col) : " ".repeat(col - left.length);
+        const body = wrap(right, indent + col).trimStart();
+        return " ".repeat(indent) + left + pad + body;
+    })
+        .join("\n");
+}
+export function mainHelp(commands) {
+    const groups = groupsOf(commands);
+    const rows = groups.map(g => {
+        const names = commands.filter(c => c.group === g && !c.hidden).map(c => c.name);
+        return [g, `${GROUP_INFO[g] || ""}${GROUP_INFO[g] ? ": " : ""}${names.join(", ")}`];
+    });
+    return [
+        `ludo ${VERSION}: generate game assets with Ludo AI from the command line.`,
+        "",
+        "Usage:",
+        "  ludo <group> <command> [flags]",
+        "  ludo <group> <command> --help",
+        "",
+        "Groups:",
+        table(rows),
+        "",
+        ...(TOOLS.length ? ["Free tools (offline, no account):", table([["toolbox", toolboxSummary()]]), ""] : []),
+        "Other commands:",
+        table([
+            ["login", "Log in with your browser (--with-key to paste an API key instead)"],
+            ["signup", "Create an account and subscribe in one payment (--email, --plan)"],
+            ["logout", "Log out and revoke this CLI login"],
+            ["billing", "Open the billing page: buy credits, change plan or auto top-up"],
+            ["topup", "Buy extra credits: a payment link, or a Link token without a browser (--credits)"],
+            ["pricing", "Plans, what each includes, what calls cost (no login needed)"],
+            ["feedback <message>", "Tell the Ludo team about a limitation, bug, idea or win"],
+            ["init", "Set this folder up as a project: .ludo.json, agent instructions"],
+            ["batch <jobs.json>", "Run a list of generations side by side"],
+            ["assets [redo <file>]", "List generated files and how they were made; make one again"],
+            ["spend [reset]", "Show what has been spent against the spending budget"],
+            ["update", "Update ludo to the newest version"],
+            ["preview <file>", "Show an image in the terminal; spritesheets play"],
+            ["files upload <path>", "Upload a local file and print its URL"],
+            ["jobs wait <id>", "Wait for a job and download its results"],
+            ["agent-help", "A short guide for AI agents using this CLI"],
+            ["skill install", "Teach Claude Code the CLI (--project for this repo)"],
+            ["spec [refresh|path]", "Show or refresh the API spec the commands are built from"],
+            ["version", "Print the version"]
+        ]),
+        "",
+        "Examples:",
+        "  ludo image create --prompt \"a knight with a red cape\" --image-type sprite",
+        "  ludo sprite animate --initial-image knight.png --motion-prompt \"walk cycle\"",
+        "  ludo image remove-background --image photo.jpg --out assets/",
+        "",
+        "Local files passed to image, audio, video or model flags are uploaded for you.",
+        "Generations wait for the result and save files to ./ludo-output unless --no-wait."
+    ].join("\n");
+}
+// Usage for the commands that do something straight away. `--help` on them
+// prints this and nothing else: `ludo login --help` must not start a login,
+// nor `ludo logout --help` revoke the key.
+export const BUILTIN_HELP = {
+    login: [
+        "Usage: ludo login [--no-browser]",
+        "       ludo login --with-key [<key>]   (or pipe the key on stdin)",
+        "",
+        "Logs in through the browser: it opens a page where you log in (or create an account) and approve",
+        "this CLI, and waits up to 10 minutes. --no-browser prints the page instead of opening it.",
+        "--with-key saves an existing API key instead, for CI and machines without a browser.",
+        ""
+    ].join("\n"),
+    signup: [
+        "Usage: ludo signup --email <address> --plan <id> [--interval month|year] [--full-name <name>]",
+        "       ludo signup --continue [--code <code> | --resend]",
+        "",
+        "Creates a Ludo account and subscribes it to a plan in one payment, with no web login. It prints a",
+        "Stripe checkout link for that email and plan, and waits up to an hour for it to be paid: by you, or",
+        "by an agent with a wallet of its own. Nothing is created or charged before that. Paying creates the",
+        "account, and the address is emailed a connect code and a link to set a password for the web app.",
+        "Type the code when asked, or pass it with `ludo signup --continue --code <code>` (it works for a",
+        "day), and this CLI is logged in. `ludo pricing` lists the plans; only single-user plans with API",
+        "access can be bought here.",
+        "",
+        "--no-wait prints the link and returns. --no-browser prints the link instead of opening it.",
+        "--resend emails the code again (a lost email; the old code stops working). --restart drops a",
+        "signup that is still waiting and starts a new one (it ends that link). Already have an account?",
+        "`ludo login`.",
+        "",
+        "Paying without a browser, with Link (Stripe's agent wallet, for US and Canadian customers):",
+        "       ludo signup --plan <id> [--interval month|year] [--email <address>] --quote",
+        "       ludo signup --email <address> --plan <id> --payment-token <spt_...|->",
+        "",
+        "--quote prints the price and the `link-cli spend-request create` command that asks the account",
+        "holder to approve a payment to Ludo. Once approved, `link-cli spend-request retrieve <id> --include",
+        "shared_payment_token` gives the token (spt_...). --payment-token charges it, creates the account",
+        "and logs this CLI in at once: no checkout link and no emailed code. A token made with",
+        "--recurring-interval pays the renewals too, within the limit the holder approved; a one-time",
+        "token buys one period, and the plan then ends unless a card is added in the web app. A token buys",
+        "one account. With --email, --quote names the address in what the holder approves. The token is as",
+        "good as money: pass `--payment-token -` to read it from stdin, or set LUDO_PAYMENT_TOKEN.",
+        ""
+    ].join("\n"),
+    logout: ["Usage: ludo logout", "", "Forgets the saved key, and revokes it when `ludo login` created it.", ""].join("\n"),
+    billing: ["Usage: ludo billing", "", "Opens the billing page (buy credits, change plan or auto top-up), or prints its URL.", ""].join("\n"),
+    topup: [
+        "Usage: ludo topup --credits <n>                       a payment link, and wait for it",
+        "       ludo topup --credits <n> --quote               the price, and the Link command for a token",
+        "       ludo topup --credits <n> --payment-token <spt_...|->",
+        "       ludo topup --continue",
+        "",
+        "Buys extra credits for the account this CLI is logged in to, at your plan's top-up price (`ludo",
+        "pricing` lists them; amounts go in steps, from the minimum to the maximum the quote shows). Someone",
+        "approves every purchase: never the card saved on the account (that is what auto top-up is for).",
+        "",
+        "Without a token it prints a Stripe payment page for the amount and waits up to 30 minutes for it to",
+        "be paid; --no-wait prints it and returns, and `ludo topup --continue` checks on it later.",
+        "",
+        "With Link (Stripe's agent wallet, for US and Canadian customers), no browser: --quote prints a one-time",
+        "`link-cli spend-request create` command for exactly that amount. Once the holder approves it,",
+        "`link-cli spend-request retrieve <id> --include shared_payment_token` gives the token, and",
+        "--payment-token charges it, and the credits are added at once (it says if they are still on their way). The token must be for",
+        "exactly the quoted amount, and buys one top-up. `--payment-token -` reads it from stdin.",
+        "One payment link is open at a time; --restart ends it and makes a new one.",
+        ""
+    ].join("\n"),
+    pricing: [
+        "Usage: ludo pricing",
+        "",
+        "Ludo's plans: prices, credits, seats and what each includes or lacks; credit top-ups;",
+        "what each API call costs; and the billing rules (the API, MCP and CLI need Pro or Studio,",
+        "and there every generation costs credits). Free, and works without logging in. JSON with",
+        "--json, or when the output is not a terminal.",
+        ""
+    ].join("\n"),
+    update: [
+        "Usage: ludo update [--auto on|off]",
+        "",
+        "Updates ludo with npm install -g @ludoai/cli@latest. Outside an interactive terminal it prints",
+        "the command instead of running it.",
+        "",
+        "Automatic updates are on by default: when a newer version is out, ludo installs it in the",
+        "background after a command, and the next command runs it. This happens only for a global npm",
+        "install you can write to without sudo, never in CI, and at most once a day.",
+        "  --auto off   turn automatic updates off (saved for this user)",
+        "  --auto on    turn them back on",
+        "  --auto       say whether they are on",
+        "LUDO_AUTO_UPDATE=0 (or 1) overrides the saved setting for one shell.",
+        ""
+    ].join("\n"),
+    spec: [
+        "Usage: ludo spec [refresh|path]",
+        "",
+        "Shows where the API spec the commands are built from came from. refresh fetches it again;",
+        "path prints the cached file's path.",
+        ""
+    ].join("\n"),
+    version: ["Usage: ludo version", "", "Prints the version (also ludo --version).", ""].join("\n")
+};
+export function groupHelp(commands, group) {
+    const cmds = commands.filter(c => c.group === group && !c.hidden);
+    return [
+        `ludo ${group}: ${GROUP_INFO[group] || ""}`,
+        "",
+        "Commands:",
+        table(cmds.map(c => [c.name, `${c.summary}${c.credits ? ` (${shortCredits(c.credits)})` : ""}`])),
+        "",
+        `Run \`ludo ${group} <command> --help\` for its flags.`
+    ].join("\n");
+}
+function shortCredits(text) {
+    return text.replace(/^This endpoint consumes\s*/i, "").replace(/\.$/, "");
+}
+function flagLabel(f) {
+    if (f.in === "path")
+        return `<${f.name}>`;
+    if (f.type === "boolean")
+        return f.flag;
+    if (f.isFile)
+        return `${f.flag} <file|url>${f.type === "array" ? "..." : ""}`;
+    if (f.enum)
+        return `${f.flag} <value>${f.type === "array" ? "..." : ""}`;
+    const t = f.type === "array" ? `${f.itemType || "string"}...` : f.type === "object" ? "json" : f.type === "string" ? "text" : f.type;
+    return `${f.flag} <${t}>`;
+}
+function flagDescription(f) {
+    const parts = [f.description || ""];
+    if (f.isFile)
+        parts.push("Accepts a local file path (uploaded for you) or a URL.");
+    if (f.enum)
+        parts.push(`One of: ${f.enum.join(", ")}.`);
+    const hasMin = typeof f.minimum === "number";
+    const hasMax = typeof f.maximum === "number";
+    if (hasMin && hasMax)
+        parts.push(`Range: ${f.minimum} to ${f.maximum}.`);
+    else if (hasMin)
+        parts.push(`Minimum: ${f.minimum}.`);
+    else if (hasMax)
+        parts.push(`Maximum: ${f.maximum}.`);
+    if (f.default !== undefined && f.default !== null && f.default !== "")
+        parts.push(`Default: ${JSON.stringify(f.default)}.`);
+    if (f.type === "array" && !f.isFile)
+        parts.push("Repeat the flag, or pass a JSON array.");
+    return parts.filter(Boolean).join(" ");
+}
+export function commandHelp(c) {
+    const pathArgs = c.fields.filter(f => f.in === "path").map(f => `<${f.name}>`).join(" ");
+    const required = c.fields.filter(f => f.required && f.in !== "path");
+    const optional = c.fields.filter(f => !f.required && f.in !== "path");
+    const usage = [`ludo ${c.group} ${c.name}`, pathArgs, ...required.map(f => flagLabel(f)), optional.length ? "[flags]" : ""]
+        .filter(Boolean)
+        .join(" ");
+    const out = [`Usage: ${usage}`, "", wrap(c.description, 0)];
+    if (c.credits)
+        out.push("", wrap(`Credits: ${shortCredits(c.credits)}.`, 0));
+    if (c.isJob) {
+        out.push("", wrap("Runs as a job: the CLI submits it, waits for the result and saves the files to --out " +
+            "(default ./ludo-output). With --no-wait it prints the job id instead; follow up with `ludo jobs wait <id>`.", 0));
+    }
+    else if (SAVED_ANSWERS[c.operationId]) {
+        out.push("", wrap("Answers at once (no job) and saves the files it answers to --out (default ./ludo-output)" +
+            (SAVED_ANSWERS[c.operationId] === "log" ? ", recorded in ludo-assets.json." : "."), 0));
+    }
+    const args = c.fields.filter(f => f.in === "path");
+    if (args.length)
+        out.push("", "Arguments:", table(args.map(f => [flagLabel(f), flagDescription(f)])));
+    if (required.length)
+        out.push("", "Required flags:", table(required.map(f => [flagLabel(f), flagDescription(f)])));
+    if (optional.length)
+        out.push("", "Flags:", table(optional.map(f => [flagLabel(f), flagDescription(f)])));
+    const globals = Object.entries(GLOBAL_FLAGS)
+        .filter(([name]) => (c.isJob ? true : savesFiles(c) ? !["--no-wait", "--timeout"].includes(name) : !["--no-wait", "--no-download", "--timeout", "--out", "--name"].includes(name)))
+        .map(([name, g]) => [g.value ? `${name} <value>` : name, g.description]);
+    out.push("", "Global flags:", table(globals));
+    out.push("", `API operation: ${c.operationId} (${c.method} /api${c.path})`);
+    return out.join("\n");
+}
+export function agentHelp(commands) {
+    const groups = groupsOf(commands)
+        .map(g => `- ${g}: ${commands.filter(c => c.group === g && !c.hidden).map(c => c.name).join(", ")}`)
+        .join("\n");
+    return `# ludo CLI: guide for AI agents
+
+Ludo AI generates game assets (sprites, spritesheet animations, images, 3D models, video, audio).
+Every command maps to one Ludo API operation; its \`--help\` is generated from the live API spec.
+
+## Discover
+- \`ludo <group> --help\` lists commands; \`ludo <group> <command> --help\` lists flags, enums, defaults and credit cost.
+- Descriptions name other operations by their API id (createSoundEffect, getDocs); \`ludo <apiId>\` runs them too, e.g. \`ludo createSoundEffect --help\`.
+- Before using a feature you have not used, ask the docs: \`ludo docs search --query "how do I pick an animation mode?"\`.
+
+${groups}
+
+${TOOLS.length ? `## Free tools (offline, no account, no credits)
+- \`ludo toolbox\` lists them; \`ludo toolbox <group> <tool> --help\` gives the flags. They need no login and no network.
+${TOOLS.map(t => `- \`ludo toolbox ${t.group} ${t.name} ${t.args}\`: ${t.summary}`).join("\n")}
+- A GIF or animated WebP reads as a sheet of its frames, so every sprite and image tool takes one; \`ludo toolbox sprite gif <sheet>\` goes the other way.
+- A tool's JSON may carry \`hint: {text, command}\`, the natural next step; mention it to the user once if it fits.
+- Exit code 12: an input file it cannot read or use, or a grid it cannot tell for sure; pass \`--grid <cols>x<rows>\`.
+
+` : ""}## Call
+- Flags are the API fields in kebab-case: \`image_type\` -> \`--image-type\`. Booleans: \`--crop\` / \`--no-crop\`.
+- Files: pass a local path to any image/audio/video/model flag (\`--image ./knight.png\`); the CLI uploads it (15MB max). URLs work too. Never base64-encode files yourself.
+- Complex bodies: \`--input body.json\` (or \`--input -\` for stdin); flags override its fields.
+- Generations block until done, then save every result file to \`./ludo-output\` (\`--out <dir>\` to change).
+  Name them with \`--name <base>\` (\`--name sfx_pump\` -> \`sfx_pump.mp3\`) rather than renaming files afterwards;
+  an existing file is never overwritten (the new one gets \`-2\`).
+- Results that arrive as WebP (images, spritesheets, normal maps) are saved twice, as \`.webp\` and as \`.png\` side by side.
+  \`--image-format png\` keeps the PNG only, \`--image-format webp\` the WebP only (a WebP sheet carries no grid, and \`--engine\` needs the PNG).
+- Game engines: \`--engine godot\` also writes a Godot 4 SpriteFrames \`.tres\` next to a spritesheet, \`--engine texturepacker\` a TexturePacker JSON atlas for PixiJS and Phaser, \`--engine unity\` the sheet's \`.png.meta\` (sliced into sprites) and an \`.anim\` clip (listed in \`files\`; in a Unity project, save under \`Assets/\`). In Phaser load it with \`this.load.aseprite(key, png, json)\` so \`this.anims.createFromAseprite(key)\` builds the animation. \`ludo toolbox sprite export <sheet> --engine ...\` does it for a sheet you already have.
+- Directional Sprites (a character seen from up to 8 directions that line up): make a rigged model
+  (\`ludo model create --image hero.png --rig\`), pick a style (\`ludo sprite directional-styles\`), check the look
+  with \`ludo sprite directional-preview\` (free; saves the frames as images to look at; one preview at a time per
+  account), then render \`ludo sprite directional\` (one sheet per direction, files named \`-SW\`, \`-N\`, ...).
+- Your own animations (a move no animation preset covers, for humanoid characters): \`ludo model animation --prompt "overhead sword slash"\`
+  generates it once and saves it to the account for good, tied to no model (its preview mp4 is saved with the job's files).
+  Pass its \`id\` as \`--animation-id\` wherever \`--preset-id\` goes: \`ludo model animate-preset\`, \`ludo sprite directional\`,
+  \`ludo sprite directional-preview\` and \`ludo sprite transfer-motion\` (with \`--perspective\` and \`--direction\`).
+  \`--mirror\` plays a preset or an animation on the other side. \`ludo model animations\` (free) lists the ones already on
+  the account: check it, and \`ludo sprite list-animation-presets\`, before generating a move.
+  Long jobs: \`--no-wait\` returns \`{id, status}\`; resume with \`ludo jobs wait <id>\`.
+
+## Output
+- stdout is JSON when not a terminal (force with \`--json\`): \`{job_id, status, credits_charged, result, files: [{url, path}]}\`.
+- Result URLs expire after 7 days; the downloaded files in \`files[].path\` (relative to the working directory; \`files[].absolute_path\` is the same file, absolute) are yours to keep.
+- Progress goes to stderr (\`--quiet\` silences it).
+
+## Projects, cost and reuse
+- \`.ludo.json\` (made by \`ludo init\`) sets the output folder, engine, file format, spending budget and per-command defaults;
+  flags override it. Generated files are listed in \`ludo-assets.json\`.
+- Check \`ludo assets\` before generating: the asset may already exist. \`ludo assets redo <file> [flags]\` makes it
+  again with changes.
+- \`--dry-run\` prints the price without running; \`--max-credits <n>\` refuses anything dearer. Prices for
+  duration-priced models are upper bounds.
+- A spending budget (\`LUDO_MAX_CREDITS\` or \`max_credits\`) stops the CLI once reached: exit code 11. Do not work
+  around it; tell the user what was spent (\`ludo spend\`) and ask.
+- \`--n 4\` makes four variations (files \`-v1\`..\`-v4\`, JSON lists each; with \`--name\`, \`<name>-v1\`..). Look at them, keep the best, delete the rest.
+- \`--save-normals\` saves each normal map beside its file as \`<file>_n\` (\`crate-v1_n.png\`); the JSON lists it under the variation's \`normal_maps\`, not as a variation.
+- Several different assets: write a jobs file and run \`ludo batch jobs.json\` (see \`ludo batch --help\`); a job's
+  \`"name"\` names its files. A full queue (50 jobs, other sessions' included) makes the batch wait, not fail. Give
+  each job a \`"request_id"\`: running the file again then brings back the same jobs and keeps the files already saved.
+
+## Exit codes
+0 ok, 1 error, 2 bad usage, 3 auth, 4 rejected by the API, 5 not enough credits, 6 job failed (credits refunded;
+in a batch, at least one item failed), 7 job canceled, 8 rate limited / too many queued jobs, 9 timed out waiting
+(job keeps running), 10 this CLI version is too old (update it), 11 refused by the spending guard, 12 a toolbox
+input it cannot use.
+
+## Auth and credits
+- The key comes from \`LUDO_API_KEY\`, a prior \`ludo login\`, or \`--api-key\`.
+- On exit code 3 (no or rejected key), do not ask the user to paste a key into the chat. Ask them to run
+  \`ludo login\` in their own terminal: it opens the browser, where they log in or create an account and
+  pick a plan with API access if needed. It waits up to 10 minutes for them to approve.
+- Every generation costs credits; \`--help\` shows the price. \`ludo account\` shows the balance, plan and
+  auto top-up; check it before an expensive batch.
+- A user with no Ludo account can get one without the web app: \`ludo signup --email <address> --plan <id>
+  --no-wait\` prints a Stripe checkout link for the plan (\`ludo pricing\` lists them). Ask the user for the
+  email and which plan first, and never guess either. Give them the link to pay, or pay it yourself only if
+  the user has given you a way to pay and told you to. Paying emails that address a connect code: ask the
+  user for it (or read it from their mail only if they gave you access), then
+  \`ludo signup --continue --code <code>\` logs this CLI in. Never start a signup for an address the user
+  did not give you.
+- With Link (Stripe's agent wallet, \`link-cli\`) you can pay without a browser, but only if the user told
+  you to pay: \`ludo signup --plan <id> --email <address> --quote\` prints the \`link-cli spend-request create\` command
+  (Ludo's network id, the amount, a monthly or yearly limit). The user approves it in Link; then
+  \`link-cli spend-request retrieve <id> --include shared_payment_token\` gives the token, and
+  \`ludo signup --email <address> --plan <id> --payment-token <spt_...>\` creates the account and logs this
+  CLI in at once. Never change the amount or the cadence the quote gives.
+- On exit code 5, do not retry. Tell the user they are out of credits (or their plan lacks API access) and
+  that \`ludo billing\` opens the page to buy credits or change plan. You can also prepare a top-up:
+  \`ludo topup --credits <n> --no-wait\` prints a payment link for the user to pay, or, if the user told you
+  to pay and uses Link, \`ludo topup --credits <n> --quote\` prints the one-time \`link-cli\` command and
+  \`ludo topup --credits <n> --payment-token -\` pays it. Ask how many credits; never buy unasked.
+- Before advising a user to sign up, upgrade or buy credits, run \`ludo pricing\` (free, no login): the plans,
+  what each includes, what calls cost, and the rules (generating here needs Pro or Studio, and costs credits
+  on every plan). Quote it rather than guessing prices.
+
+## Feedback
+- When you hit a limitation you cannot work around, a bug, or something the user needed that Ludo
+  cannot do, send one short report and tell the user you did:
+  \`ludo feedback "<what you tried, what happened, what would have helped>" --category limitation\`
+  (categories: limitation, bug, feature_request, praise, other; add \`--operation\` and \`--job <id>\`
+  when they apply). Praise for results that worked well is welcome too. It is free but capped at a
+  few reports a day, so send one per issue. Never include secrets, personal data or file contents.
+
+## Usage stats
+- Each command sends Ludo the command name, exit code, duration, flag names (never values), versions and
+  job ids. No prompts, paths or file contents. \`LUDO_TELEMETRY=0\` (or \`DO_NOT_TRACK=1\`) turns it off.
+`;
+}

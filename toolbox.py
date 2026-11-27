@@ -190,7 +190,14 @@ def launch(workflow,tool,action,args,base=BASE):
     if action=='guide':return chosen
     if (base/'portable-profile.json').is_file() and not (base/'.tools-home.json').is_file():
         raise ValueError('Prepare an external tools home first; managed package files never own installed runtime')
-    if tool=='decisions':
+    if tool=='git-scope':
+        cmd=[sys.executable,'-X','utf8','-B',str(folder/'review_helper.py'),*args]
+    elif tool=='sprite-diagnostics':
+        cmd=[sys.executable,'-X','utf8','-B',str(folder/'run.py'),action,*args]
+    elif tool=='demo-support':
+        if action!='health' or args:raise ValueError('Demo support executable action is fixed health; processing follows the guide')
+        cmd=[sys.executable,'-X','utf8','-B',str(folder/'health.py')]
+    elif tool=='decisions':
         python=folder/'runtime/client/Scripts/python.exe'
         if action=='classify':
             parse=argparse.ArgumentParser();parse.add_argument('--backend',choices=['intern','laya','startlux'],default='intern');parse.add_argument('--purpose')
@@ -237,7 +244,8 @@ def launch(workflow,tool,action,args,base=BASE):
             script='render.mjs' if action=='render' else 'chart.mjs'
             cmd=['node',str(home/script),*([action] if action!='render' else []),*args[2:]]
     else:raise ValueError('Action has no executable launcher')
-    return subprocess.run(cmd,cwd=base.parent if tool=='local-image' else folder,check=False).returncode
+    child_cwd = Path.cwd() if (tool=='git-scope' or (tool,action)==('media','body-candidate')) else base.parent if tool=='local-image' else folder
+    return subprocess.run(cmd,cwd=child_cwd,check=False).returncode
 
 def main(argv=None):
     parser=argparse.ArgumentParser(description=__doc__);sub=parser.add_subparsers(dest='command',required=True)

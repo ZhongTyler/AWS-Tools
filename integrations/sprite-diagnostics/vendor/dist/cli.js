@@ -1,0 +1,912 @@
+#!/usr/bin/env node
+import { spawnSync } from "node:child_process";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import readline from "node:readline";
+import { Api, uploadFile } from "./api.js";
+import { parseArgv } from "./args.js";
+import { buildCommands, findCommand, groupsOf } from "./commands.js";
+import { readConfig, resolveApiKey, resolveApiUrl, VERSION, writeConfig } from "./config.js";
+import { armCrashReports, reportCrash } from "./crash.js";
+import { handleSignals, onExit } from "./shutdown.js";
+import { armTelemetry, forgetFact, noteFact, sendTelemetry, triedName } from "./telemetry.js";
+import { CliError, EXIT, localFsError, specMismatch } from "./errors.js";
+import { makeCtx, printJson, runBatch, runCommand, runJobWait } from "./generate.js";
+import { agentHelp, BUILTIN_HELP, commandHelp, groupHelp, mainHelp } from "./help.js";
+import { flushNotes, latestVersion, noteUpdate } from "./notices.js";
+import { autoUpdateEnabled, backgroundInstall, maybeAutoUpdate } from "./auto-update.js";
+import { loadProject } from "./project.js";
+import { embeddedSpecPath, loadSpec } from "./spec.js";
+import { parseGrid, previewFile, previewSkipped } from "./tty/preview.js";
+import { logo } from "./tty/flair.js";
+import { installSkill, isInstalled, refreshSkills, skillTarget, uninstallSkill } from "./skill.js";
+import { accountLine, accountSummary, agentName, billingUrlFor, browserLogin, canOpenBrowser, isAgent, openBrowser, webUrlFor } from "./login.js";
+import { assets, BATCH_HELP, init, loadBatch, spend } from "./workspace.js";
+import { toolbox } from "./toolbox/index.js";
+import { pricing } from "./pricing-guide.js";
+import { checkoutTopup, money, payTopup, quoteTopup, topupStatus, waitForTopup } from "./topup.js";
+import { finalError, paySignup, pollSignup, resendSignupCode, priceLine, quoteSignup, showCheckout, startSignup, waitForPayment } from "./signup.js";
+// All of stdin, waiting for it: a synchronous read of a pipe whose writer has
+// not written yet (a token piped from `link-cli`, which takes a moment) fails
+// with EAGAIN.
+function readStdinAll() {
+    return new Promise((resolve, reject) => {
+        let text = "";
+        process.stdin.setEncoding("utf8");
+        process.stdin.on("data", chunk => (text += chunk));
+        process.stdin.on("end", () => resolve(text));
+        process.stdin.on("error", reject);
+    });
+}
+async function promptSecret(question) {
+    if (!process.stdin.isTTY)
+        return (await readStdinAll()).trim();
+    const rl = readline.createInterface({ input: process.stdin, output: process.stderr, terminal: true });
+    const answer = await new Promise(resolve => rl.question(question, resolve));
+    rl.close();
+    return answer.trim();
+}
+function flagSet(parsed, name) {
+    return parsed.flags.has(name);
+}
+async function fetchAccount(apiUrl, key) {
+    const res = await new Api(apiUrl, key).request("GET", "/assets/account", { timeoutMs: 10_000 });
+    return res.status === 200 ? res.body : undefined;
+}
+// `ludo login` opens the browser login. `ludo login --with-key` (key from the
+// prompt or stdin), `ludo login <key>` and `--api-key <key>` save a key
+// instead, for CI and machines without a browser.
+async function login(ctx, parsed, words) {
+    const apiUrl = resolveApiUrl(parsed.globals.apiUrl);
+    let key = parsed.globals.apiKey || words[0];
+    const pasted = !!key || flagSet(parsed, "--with-key");
+    if (!key && flagSet(parsed, "--with-key")) {
+        const given = parsed.flags.get("--with-key")?.find(v => v !== "\u0000flag");
+        key = given || (await promptSecret("Ludo API key: "));
+        if (!key)
+            throw new CliError("No key given", EXIT.USAGE);
+    }
+    if (key) {
+        const res = await new Api(apiUrl, key).request("GET", "/auth/validate-api-key");
+        if (res.status === 402)
+            throw new CliError("That key is valid, but your plan has no API access", EXIT.CREDITS, `Change plan at ${billingUrlFor(apiUrl)}`);
+        if (res.status < 200 || res.status >= 300)
+            throw new CliError("That API key was rejected", EXIT.AUTH);
+    }
+    else {
+        // Progress goes to stderr even with --quiet: the person needs the URL.
+        const log = (msg) => process.stderr.write(msg + "\n");
+        const noBrowser = flagSet(parsed, "--no-browser");
+        ({ key } = await browserLogin(apiUrl, { log, openBrowser: !noBrowser && canOpenBrowser() }));
+    }
+    const config = { ...readConfig(), api_key: key, ...(parsed.globals.apiUrl ? { api_url: parsed.globals.apiUrl } : {}) };
+    if (pasted)
+        delete config.key_source;
+    else
+        config.key_source = "login";
+    const file = writeConfig(config);
+    const account = await fetchAccount(apiUrl, key).catch(() => undefined);
+    ctx.log(`Saved to ${file}`);
+    if (process.env.LUDO_API_KEY && process.env.LUDO_API_KEY !== key) {
+        process.stderr.write("Note: LUDO_API_KEY is set in your environment and takes precedence over this login. Unset it to use the login.\n");
+    }
+    if (ctx.jsonOut)
+        printJson({ ok: true, config: file, account }, false);
+    else {
+        process.stdout.write(account ? `✓ Player 1 ready: ${accountLine(account)}\n` : "✓ Logged in\n");
+        // Claude Code users get a pointer to the skill if they don't have it yet.
+        const claudeHome = process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), ".claude");
+        if (fs.existsSync(claudeHome) && !isInstalled())
+            process.stderr.write("Using Claude Code? Teach it the CLI: ludo skill install\n");
+    }
+    return EXIT.OK;
+}
+// `ludo signup --email <address> --plan <id>`: an account and a plan in one
+// payment (signup.ts). It prints a Stripe checkout link and waits for it to be
+// paid; then the address is emailed a connect code, which a person types here
+// or an agent passes with `ludo signup --continue --code <code>`. --no-wait
+// prints the link and returns at once.
+async function signup(ctx, parsed) {
+    const flag = (name) => parsed.flags.get(name)?.find(v => v !== "\u0000flag");
+    const log = (msg) => process.stderr.write(msg + "\n");
+    const forget = () => {
+        const rest = { ...readConfig() };
+        delete rest.pending_signup;
+        writeConfig(rest);
+    };
+    let pending = readConfig().pending_signup;
+    const continuing = flagSet(parsed, "--continue");
+    // What to ask Link for, to pay without a browser. Free, no account needed.
+    if (flagSet(parsed, "--quote")) {
+        const plan = flag("--plan");
+        if (!plan)
+            throw new CliError("ludo signup --quote needs --plan", EXIT.USAGE, "`ludo pricing` lists the plans.");
+        const quote = await quoteSignup(resolveApiUrl(parsed.globals.apiUrl), plan, flag("--interval"), flag("--email"));
+        if (ctx.jsonOut) {
+            printJson({ ok: true, ...quote }, false);
+            return EXIT.OK;
+        }
+        log(`${priceLine(quote.plan)}. To pay with Link, without a browser:`);
+        quote.steps.forEach((step, i) => log(`  ${i + 1}. ${step}`));
+        log("The spend request:");
+        process.stdout.write(`${quote.link_cli_command}\n`);
+        return EXIT.OK;
+    }
+    // A machine that is already logged in would end up with a second,
+    // separately billed account, and its saved key replaced.
+    if (resolveApiKey(parsed.globals.apiKey)) {
+        throw new CliError("This CLI is already logged in to a Ludo account", EXIT.USAGE, "`ludo account` shows it. To create a different account, run `ludo logout` first (and unset LUDO_API_KEY).");
+    }
+    // Paid with a Link token: one request, and the key comes back with it.
+    // The token is as good as money for whoever holds it, so it can also come
+    // from stdin (`--payment-token -`) or LUDO_PAYMENT_TOKEN, and stay out of
+    // the shell history.
+    const tokenFlag = parsed.flags.has("--payment-token");
+    let paymentToken = flag("--payment-token") || process.env.LUDO_PAYMENT_TOKEN || undefined;
+    // From a pipe it reads stdin; at a terminal it asks.
+    if (paymentToken === "-")
+        paymentToken = await promptSecret("Link payment token (spt_...): ");
+    // Asked to pay with a token and given none (an empty pipe or variable):
+    // never fall back to a checkout link the caller did not ask for.
+    if ((tokenFlag || process.env.LUDO_PAYMENT_TOKEN !== undefined) && !paymentToken) {
+        throw new CliError("No payment token was given", EXIT.USAGE, "Pass the spt_... token from `link-cli spend-request retrieve <id> --include shared_payment_token`, on stdin with `--payment-token -`, or in LUDO_PAYMENT_TOKEN.");
+    }
+    if (paymentToken) {
+        if (continuing)
+            throw new CliError("--payment-token starts a signup; it cannot continue one", EXIT.USAGE);
+        if (pending && !flagSet(parsed, "--restart")) {
+            throw new CliError(`A signup for ${pending.email} is already waiting for its checkout link to be paid`, EXIT.USAGE, "Run `ludo signup --continue` for that one, or add --restart to drop it and pay with the token instead (its checkout link is ended if it was not paid).");
+        }
+        const email = flag("--email");
+        const plan = flag("--plan");
+        if (!email || !plan) {
+            throw new CliError("ludo signup needs --email and --plan", EXIT.USAGE, "`ludo signup --plan <id> --quote` says what token to ask Link for.");
+        }
+        const apiUrl = resolveApiUrl(parsed.globals.apiUrl);
+        log("Paying with the Link token…");
+        const paid = await paySignup(apiUrl, { email, plan, interval: flag("--interval"), name: flag("--full-name"), payment_token: paymentToken });
+        const saved = { ...readConfig(), api_key: paid.api_key, key_source: "login", ...(apiUrl !== resolveApiUrl(undefined) ? { api_url: apiUrl } : {}) };
+        delete saved.pending_signup;
+        const file = writeConfig(saved);
+        const account = await fetchAccount(apiUrl, paid.api_key).catch(() => undefined);
+        ctx.log(`Saved to ${file}`);
+        if (ctx.jsonOut) {
+            printJson({ ok: true, status: "completed", config: file, email: paid.email, renews: paid.renews, period_end: paid.period_end, account }, false);
+        }
+        else {
+            process.stdout.write(account ? `✓ Account created. Player 1 ready: ${accountLine(account)}\n` : "✓ Account created\n");
+        }
+        if (paid.message)
+            log(paid.message);
+        log(`${paid.email} has a link to set a password for the web app (${webUrlFor(apiUrl)}).`);
+        return EXIT.OK;
+    }
+    if (continuing) {
+        if (!pending)
+            throw new CliError("There is no signup waiting", EXIT.USAGE, "Start one with `ludo signup --email <address> --plan <id>`.");
+    }
+    else {
+        // A second link for the same person is how they end up paying twice.
+        // The server keeps the first one's place for a day after it is paid.
+        if (pending && !flagSet(parsed, "--restart")) {
+            throw new CliError(`A signup for ${pending.email} is already waiting`, EXIT.USAGE, `Its checkout link: ${pending.checkout_url}\nRun \`ludo signup --continue\` once it is paid, or \`ludo signup --restart ...\` to drop it and start again.`);
+        }
+        const email = flag("--email");
+        const plan = flag("--plan");
+        if (!email || !plan) {
+            throw new CliError("ludo signup needs --email and --plan", EXIT.USAGE, "`ludo pricing` lists the plans. Already have an account? Run `ludo login`.");
+        }
+        const apiUrl = resolveApiUrl(parsed.globals.apiUrl);
+        const started = await startSignup(apiUrl, { email, plan, interval: flag("--interval"), name: flag("--full-name") });
+        pending = {
+            device_code: started.device_code,
+            checkout_url: started.checkout_url,
+            email: started.email,
+            expires_at: Date.now() + started.expires_in * 1000,
+            interval: started.interval,
+            // Always recorded: --continue must reach the server that holds the
+            // signup, wherever LUDO_API_URL points by then.
+            api_url: apiUrl
+        };
+        writeConfig({ ...readConfig(), pending_signup: pending });
+        showCheckout(started, { log, openBrowser: parsed.globals.wait && !flagSet(parsed, "--no-browser") && canOpenBrowser() });
+        if (!parsed.globals.wait) {
+            if (ctx.jsonOut) {
+                printJson({ ok: true, status: "pending", checkout_url: started.checkout_url, email: started.email, plan: started.plan, expires_in: started.expires_in }, false);
+            }
+            else if (!process.stdout.isTTY) {
+                // For a script reading stdout; a person already saw it above.
+                process.stdout.write(`${started.checkout_url}\n`);
+            }
+            log("When it is paid, run `ludo signup --continue --code <code>` with the code we email to that address.");
+            return EXIT.OK;
+        }
+        log(`Waiting for the payment (${priceLine(started.plan)})…`);
+    }
+    const apiUrl = pending.api_url || resolveApiUrl(parsed.globals.apiUrl);
+    const deviceCode = pending.device_code;
+    // The email with the code never came (or is lost): send it again.
+    if (continuing && flagSet(parsed, "--resend")) {
+        const resent = await resendSignupCode(apiUrl, deviceCode);
+        if (resent.status === "expired") {
+            forget();
+            throw finalError("This signup is no longer waiting", EXIT.TIMEOUT, "If it was paid, the account exists: use \"Forgot password\" on the login page, then run `ludo login`.");
+        }
+        if (resent.status !== "code_required")
+            throw new CliError("There is no emailed code to resend yet: the checkout link has not been paid", EXIT.USAGE, `Pay it first: ${pending.checkout_url}`);
+        if (ctx.jsonOut)
+            printJson({ ok: true, status: "code_required", email: pending.email, resends_left: resent.resends_left }, false);
+        else
+            process.stdout.write(`Sent a new code to ${resent.email_hint || pending.email}. The old one no longer works.\n`);
+        log("Run `ludo signup --continue --code <code>` with the new code. Check the spam folder too.");
+        return EXIT.OK;
+    }
+    const interactive = canOpenBrowser() || (!!process.stdin.isTTY && !!process.stderr.isTTY && !isAgent() && !process.env.CI);
+    let code = flag("--code");
+    // Where is it? With a code in hand, try it straight away.
+    let state = code ? await pollSignup(apiUrl, deviceCode, code) : continuing && !parsed.globals.wait ? await pollSignup(apiUrl, deviceCode) : await waitForPayment(apiUrl, pending);
+    for (;;) {
+        if (state.status === "completed")
+            break;
+        if (state.status === "expired") {
+            forget();
+            throw finalError("This signup is no longer waiting", EXIT.TIMEOUT, "If the link was never paid, run `ludo signup` again. If it was, the account exists: use the set-your-password link we emailed, then run `ludo login`.");
+        }
+        if (state.status === "failed") {
+            forget();
+            throw finalError(state.message || "The signup could not be completed", EXIT.ERROR);
+        }
+        if (state.status === "pending") {
+            if (code)
+                throw new CliError("The checkout link has not been paid yet", EXIT.ERROR, `Pay it first: ${pending.checkout_url}`);
+            if (ctx.jsonOut)
+                printJson({ ok: true, status: "pending", checkout_url: pending.checkout_url, email: pending.email }, false);
+            else
+                process.stdout.write(`Not paid yet: ${pending.checkout_url}\n`);
+            log("Run `ludo signup --continue` again once it is paid.");
+            return EXIT.OK;
+        }
+        if (state.status === "code_wrong") {
+            const left = state.attempts_left;
+            const hint = typeof left === "number" ? `${left} attempt${left === 1 ? "" : "s"} left.` : undefined;
+            if (!interactive)
+                throw new CliError("That is not the code we emailed", EXIT.USAGE, [hint, "Check the email and run `ludo signup --continue --code <code>` again."].filter(Boolean).join(" "));
+            log(`That is not the code we emailed. ${hint || ""}`);
+        }
+        // code_required, or a wrong code at a terminal: ask for it.
+        const where = (state.status === "code_required" && state.email_hint) || pending.email;
+        if (!interactive) {
+            if (ctx.jsonOut)
+                printJson({ ok: true, status: "code_required", email: pending.email }, false);
+            else
+                process.stdout.write(`Paid. The account exists.\n`);
+            log(`We emailed a connect code to ${where}. Run \`ludo signup --continue --code <code>\` to finish.`);
+            return EXIT.OK;
+        }
+        if (state.status === "code_required")
+            log(`Paid. We emailed a connect code to ${where}.`);
+        code = await promptSecret("Code from the email: ");
+        if (!code)
+            throw new CliError("No code given", EXIT.USAGE, "Run `ludo signup --continue --code <code>` when you have it.");
+        state = await pollSignup(apiUrl, deviceCode, code);
+    }
+    const saved = { ...readConfig(), api_key: state.api_key, key_source: "login", ...(pending.api_url && pending.api_url !== resolveApiUrl(undefined) ? { api_url: pending.api_url } : {}) };
+    delete saved.pending_signup;
+    const file = writeConfig(saved);
+    const account = await fetchAccount(apiUrl, state.api_key).catch(() => undefined);
+    ctx.log(`Saved to ${file}`);
+    const email = state.email || pending.email;
+    if (ctx.jsonOut)
+        printJson({ ok: true, status: "completed", config: file, email, account }, false);
+    else
+        process.stdout.write(account ? `✓ Account created. Player 1 ready: ${accountLine(account)}\n` : "✓ Account created\n");
+    log(`The same email has a link to set a password for the web app (${webUrlFor(apiUrl)}).`);
+    return EXIT.OK;
+}
+// Forgets the saved key, and revokes it on the server when `ludo login`
+// created it (a key pasted with --with-key is the account's own; leave it).
+async function logout(ctx) {
+    const config = readConfig();
+    const key = config.api_key;
+    let revoked = false;
+    if (key && config.key_source === "login") {
+        const res = await new Api(resolveApiUrl(ctx.globals.apiUrl), key).request("DELETE", "/assets/cli-key", { timeoutMs: 10_000 }).catch(() => undefined);
+        revoked = !!res && res.status >= 200 && res.status < 300;
+    }
+    delete config.api_key;
+    delete config.key_source;
+    writeConfig(config);
+    if (ctx.jsonOut)
+        printJson({ ok: true, revoked }, false);
+    else
+        process.stdout.write(`Logged out${revoked ? " (this CLI login was revoked)" : ""}\n`);
+    if (process.env.LUDO_API_KEY)
+        ctx.log("Note: LUDO_API_KEY is still set in your environment.");
+    return EXIT.OK;
+}
+// `ludo skill install|uninstall|path [--project] [--force]`
+async function skill(ctx, parsed, words) {
+    const sub = words[0];
+    const project = parsed.flags.has("--project");
+    const force = ctx.globals.force;
+    if (!sub || ctx.globals.help || !["install", "uninstall", "path"].includes(sub)) {
+        process.stdout.write([
+            "Usage: ludo skill install|uninstall|path [--project] [--force]",
+            "",
+            "Installs the Ludo skill for Claude Code, so your agent knows how to generate game assets",
+            "with this CLI. Personal by default (~/.claude/skills/ludo); --project installs it into this",
+            "project's .claude/skills instead, to share with your team through the repository.",
+            "Other agents: point them at `ludo agent-help`.",
+            ""
+        ].join("\n"));
+        return sub && !ctx.globals.help ? EXIT.USAGE : EXIT.OK;
+    }
+    if (sub === "path") {
+        process.stdout.write(`${skillTarget(project)}\n`);
+        return EXIT.OK;
+    }
+    const result = sub === "install" ? installSkill({ project, force }) : uninstallSkill({ project, force });
+    if (ctx.jsonOut)
+        printJson(result, false);
+    else {
+        const messages = {
+            installed: `✓ Installed the Ludo skill: ${result.path}\nStart a new Claude Code session to pick it up.`,
+            updated: `✓ Updated the Ludo skill: ${result.path}`,
+            unchanged: `The Ludo skill is already up to date: ${result.path}`,
+            removed: `Removed the Ludo skill: ${result.path}`,
+            absent: `The Ludo skill is not installed at ${result.path}`
+        };
+        process.stdout.write(messages[result.action] + "\n");
+    }
+    return EXIT.OK;
+}
+// `ludo preview <file> [--grid 8x4] [--fps 12] [--frames N]`: shows a PNG in
+// the terminal and plays it when it is a spritesheet (Ludo sheets carry their
+// grid; others take --grid).
+async function preview(ctx, parsed, words) {
+    const file = words[0];
+    const flag = (name) => parsed.flags.get(name)?.find(v => v !== "\u0000flag");
+    if (!file || ctx.globals.help) {
+        process.stdout.write("Usage: ludo preview <file.png> [--grid <cols>x<rows>] [--fps <n>] [--frames <n>]\n\nDraws a PNG in the terminal. Spritesheets saved by ludo play automatically;\nfor other sheets pass --grid (and --fps, default 10).\n");
+        return ctx.globals.help ? EXIT.OK : EXIT.USAGE;
+    }
+    if (!fs.existsSync(file))
+        throw new CliError(`file not found: ${file}`, EXIT.USAGE);
+    if (!ctx.vis.enabled) {
+        throw new CliError("ludo preview draws in an interactive terminal", EXIT.USAGE, "It is off with --json, --plain, NO_COLOR, LUDO_PREVIEW=0, in pipes and for coding agents.");
+    }
+    let grid;
+    const gridFlag = flag("--grid");
+    if (gridFlag) {
+        const g = parseGrid(gridFlag);
+        if (!g)
+            throw new CliError(`--grid expects <cols>x<rows>, e.g. 8x4 (got "${gridFlag}")`, EXIT.USAGE);
+        const frames = Number(flag("--frames")) || g.cols * g.rows;
+        grid = { ...g, frames, fps: Number(flag("--fps")) || 10 };
+    }
+    const outcome = await previewFile(file, ctx.vis, grid);
+    if (outcome === "unsupported") {
+        process.stderr.write(`${previewSkipped().replace("add --open", "open the file")}\n`);
+        return EXIT.OK;
+    }
+    if (outcome !== "shown") {
+        throw new CliError(`Could not preview ${file}`, EXIT.USAGE, process.platform === "darwin" ? "Previews read PNG, WebP and JPEG images." : "Previews read PNG and WebP; for JPEG install ImageMagick or ffmpeg.");
+    }
+    return EXIT.OK;
+}
+// `ludo topup` (src/topup.ts): extra credits, paid with a one-time Link token
+// or on a Stripe payment page that someone pays.
+async function topup(ctx, parsed) {
+    const flag = (name) => parsed.flags.get(name)?.find(v => v !== "\u0000flag");
+    const log = (msg) => process.stderr.write(msg + "\n");
+    ctx.api.requireKey();
+    const forget = () => {
+        const rest = { ...readConfig() };
+        delete rest.pending_topup;
+        writeConfig(rest);
+    };
+    const envPoll = Number(process.env.LUDO_TOPUP_POLL_MS);
+    const pollMs = Number.isFinite(envPoll) && envPoll >= 10 ? envPoll : 5000;
+    const report = (state, extra = {}) => {
+        if (ctx.jsonOut)
+            printJson({ ok: true, ...state, ...extra }, false);
+        else if (state.status === "completed")
+            process.stdout.write(`✓ ${state.credits} credits added\n`);
+        else if (state.status === "paid")
+            process.stdout.write(`Paid. The ${state.credits} credits are being added; \`ludo account\` shows them shortly.\n`);
+        else if (state.status === "open")
+            process.stdout.write(`Not paid yet: ${state.checkout_url || readConfig().pending_topup?.checkout_url || ""}\n`);
+    };
+    // A payment-page top-up started earlier.
+    if (flagSet(parsed, "--continue")) {
+        const pending = readConfig().pending_topup;
+        if (!pending)
+            throw new CliError("There is no top-up waiting", EXIT.USAGE, "Start one with `ludo topup --credits <n>`.");
+        // The server that made the link, whatever LUDO_API_URL says now.
+        const api = pending.api_url ? new Api(pending.api_url, resolveApiKey(parsed.globals.apiKey)) : ctx.api;
+        let state;
+        try {
+            state = parsed.globals.wait ? await waitForTopup(api, pending.session_id, pending.expires_at, pollMs) : await topupStatus(api, pending.session_id);
+        }
+        catch (err) {
+            // Another account's link (logged in as someone else since): not ours to wait on.
+            if (err instanceof CliError && /No such top-up/.test(err.message)) {
+                forget();
+                throw new CliError("The waiting payment link belongs to another account", EXIT.USAGE, "It was forgotten here. Run `ludo topup --credits <n>` for a new one.");
+            }
+            throw err;
+        }
+        if (state.status === "expired") {
+            forget();
+            throw new CliError("That payment link expired unpaid", EXIT.TIMEOUT, "Run `ludo topup --credits <n>` for a new one.");
+        }
+        if (state.status !== "open")
+            forget();
+        report(state);
+        if (state.status === "open") {
+            log("Run `ludo topup --continue` again once it is paid.");
+            if (parsed.globals.wait)
+                return EXIT.TIMEOUT;
+        }
+        return EXIT.OK;
+    }
+    const raw = flag("--credits");
+    const credits = Number(raw);
+    if (!raw || !Number.isInteger(credits) || credits <= 0) {
+        throw new CliError("ludo topup needs --credits <n>", EXIT.USAGE, "`ludo topup --credits 1000 --quote` shows the price; `ludo pricing` lists the top-up prices.");
+    }
+    if (flagSet(parsed, "--quote")) {
+        const quote = await quoteTopup(ctx.api, credits);
+        if (ctx.jsonOut) {
+            printJson({ ok: true, ...quote }, false);
+            return EXIT.OK;
+        }
+        log(`${quote.credits} credits: ${money(quote.amount, quote.currency)} on your plan.`);
+        if (quote.link_cli_command) {
+            log("To pay with Link, without a browser: create this spend request, have it approved, then");
+            log("`link-cli spend-request retrieve <lsrq_id> --include shared_payment_token` gives the token, and");
+            log(`\`ludo topup --credits ${credits} --payment-token -\` reads it from stdin. Or run \`ludo topup --credits ${credits}\` for a payment link.`);
+            process.stdout.write(`${quote.link_cli_command}\n`);
+        }
+        return EXIT.OK;
+    }
+    // Paid with a one-time Link token: the credits are in when this returns.
+    // Only a token passed here, for this purchase: never one left in the
+    // environment (LUDO_PAYMENT_TOKEN is signup's), which its holder approved
+    // for something else.
+    const tokenFlag = parsed.flags.has("--payment-token");
+    let paymentToken = flag("--payment-token") || undefined;
+    if (paymentToken === "-")
+        paymentToken = await promptSecret("Link payment token (spt_...): ");
+    if (tokenFlag && !paymentToken) {
+        throw new CliError("No payment token was given", EXIT.USAGE, "Pass the one-time spt_... token for the quoted amount (`ludo topup --credits <n> --quote`), or `--payment-token -` to read it from stdin.");
+    }
+    if (paymentToken) {
+        log("Paying with the Link token…");
+        const paid = await payTopup(ctx.api, credits, paymentToken);
+        if (ctx.jsonOut)
+            printJson({ ok: true, ...paid }, false);
+        else if (paid.status === "completed")
+            process.stdout.write(`✓ ${paid.credits} credits added (${money(paid.amount, paid.currency)})\n`);
+        else
+            process.stdout.write(`Paid ${money(paid.amount, paid.currency)}. The ${paid.credits} credits are on their way; \`ludo account\` shows them shortly.\n`);
+        return EXIT.OK;
+    }
+    // A payment page for someone to pay. One at a time.
+    const waiting = readConfig().pending_topup;
+    const restart = flagSet(parsed, "--restart");
+    if (waiting && waiting.expires_at > Date.now() && !restart) {
+        throw new CliError(`A payment link for ${waiting.credits} credits is still open`, EXIT.USAGE, `Pay it (${waiting.checkout_url}) and run \`ludo topup --continue\`, or add --restart to end it and get a new one.`);
+    }
+    // --restart ends the open link on the server too, so only one can be paid.
+    const started = await checkoutTopup(ctx.api, credits, restart);
+    const pending = {
+        session_id: started.session_id,
+        checkout_url: started.checkout_url,
+        credits: started.credits,
+        expires_at: Date.now() + started.expires_in * 1000,
+        api_url: resolveApiUrl(parsed.globals.apiUrl)
+    };
+    writeConfig({ ...readConfig(), pending_topup: pending });
+    const open = parsed.globals.wait && !flagSet(parsed, "--no-browser") && canOpenBrowser() && openBrowser(started.checkout_url);
+    log(`${started.credits} credits for ${money(started.amount, started.currency)}. ${open ? "Opened the payment page" : "Pay here"}: ${started.checkout_url}`);
+    if (!parsed.globals.wait) {
+        if (ctx.jsonOut)
+            printJson({ ok: true, status: "open", ...started }, false);
+        else if (!process.stdout.isTTY)
+            process.stdout.write(`${started.checkout_url}\n`);
+        log("When it is paid, `ludo topup --continue` confirms the credits are in.");
+        return EXIT.OK;
+    }
+    log("Waiting for the payment…");
+    const state = await waitForTopup(ctx.api, started.session_id, pending.expires_at, pollMs);
+    if (state.status === "expired") {
+        forget();
+        throw new CliError("The payment link expired unpaid", EXIT.TIMEOUT, "Run `ludo topup --credits <n>` for a new one.");
+    }
+    if (state.status !== "open")
+        forget();
+    report(state);
+    if (state.status === "open") {
+        log("Still not paid. `ludo topup --continue` checks again.");
+        return EXIT.TIMEOUT;
+    }
+    return EXIT.OK;
+}
+// Opens the web app's billing page: buy credits, change plan or auto top-up.
+async function billing(ctx) {
+    const apiUrl = resolveApiUrl(ctx.globals.apiUrl);
+    const key = resolveApiKey(ctx.globals.apiKey);
+    const account = key ? await fetchAccount(apiUrl, key).catch(() => undefined) : undefined;
+    const url = account?.billing_url || billingUrlFor(apiUrl);
+    const opened = !ctx.jsonOut && canOpenBrowser() && openBrowser(url);
+    if (ctx.jsonOut)
+        printJson({ billing_url: url, account }, false);
+    else {
+        if (account)
+            process.stdout.write(accountSummary(account) + "\n");
+        process.stdout.write(opened ? `Opened ${url}\n` : `Billing: ${url}\n`);
+    }
+    return EXIT.OK;
+}
+// `ludo update`: runs the npm install for a person at a terminal; anyone else
+// (an agent, a script) gets the command, since replacing a global install can
+// need sudo and should not happen in the middle of someone else's task.
+// Automatic background updates (auto-update.ts) cover agents where that is safe.
+// `--auto on|off` turns those on or off; `--background-install <version>` is
+// the detached child they run.
+async function update(ctx, parsed) {
+    const flag = (name) => parsed.flags.get(name)?.find(v => v !== "\u0000flag");
+    const background = flag("--background-install");
+    if (background)
+        return backgroundInstall(background);
+    if (parsed.flags.has("--auto")) {
+        const value = (flag("--auto") || "").toLowerCase();
+        if (value && !["on", "off"].includes(value))
+            throw new CliError("--auto takes on or off", EXIT.USAGE);
+        const config = readConfig();
+        if (value === "off")
+            writeConfig({ ...config, auto_update: false });
+        if (value === "on") {
+            const { auto_update: _, ...rest } = config;
+            writeConfig(rest);
+        }
+        const enabled = autoUpdateEnabled();
+        const env = process.env.LUDO_AUTO_UPDATE ? ` (LUDO_AUTO_UPDATE=${process.env.LUDO_AUTO_UPDATE} decides for this shell)` : "";
+        if (ctx.jsonOut)
+            printJson({ auto_update: enabled }, false);
+        else
+            process.stdout.write(`Automatic updates are ${enabled ? "on" : "off"}${env}.\n`);
+        return EXIT.OK;
+    }
+    const command = "npm install -g @ludoai/cli@latest";
+    const human = process.stdin.isTTY && process.stdout.isTTY && !isAgent() && !process.env.CI && !ctx.globals.json;
+    if (!human) {
+        const latest = latestVersion();
+        if (ctx.jsonOut)
+            printJson({ version: VERSION, latest: latest || null, command }, false);
+        else
+            process.stdout.write(`Update with: ${command}\n(Commands follow the API automatically; updates are only needed for CLI fixes.)\n`);
+        return EXIT.OK;
+    }
+    process.stderr.write(`Running: ${command}\n`);
+    const npm = process.platform === "win32" ? "npm.cmd" : "npm";
+    const res = spawnSync(npm, ["install", "-g", "@ludoai/cli@latest"], { stdio: "inherit", shell: process.platform === "win32" });
+    if (res.status === 0)
+        return EXIT.OK;
+    throw new CliError(`The update failed${res.error ? `: ${res.error.message}` : ""}`, EXIT.ERROR, `Run it yourself: ${command} (it may need sudo)`);
+}
+const FEEDBACK_CATEGORIES = ["limitation", "bug", "feature_request", "praise", "other"];
+const FEEDBACK_HELP = [
+    "Usage: ludo feedback <message> [--category <c>] [--operation <id>] [--job <id>]...",
+    "       echo <message> | ludo feedback - [...]",
+    "",
+    "Sends feedback to the Ludo team: a limitation you hit, a bug, something you'd like",
+    "Ludo to support, or something that worked well. Free.",
+    "",
+    `  --category   ${FEEDBACK_CATEGORIES.join(", ")} (default: other)`,
+    "  --operation  the command or operation it is about, e.g. animateSprite",
+    "  --job        a job id it is about; repeat it for each job involved (up to 10)",
+    ""
+].join("\n");
+async function feedback(ctx, parsed, words) {
+    const flag = (name) => {
+        const v = parsed.flags.get(name)?.at(-1);
+        return v === undefined || v === "\u0000flag" ? undefined : v;
+    };
+    // The message is the remaining positionals, or stdin for `-` (only then:
+    // an agent's shell can leave stdin open and silent, and reading it would hang).
+    let message = words.join(" ").trim();
+    if (message === "-")
+        message = fs.readFileSync(0, "utf8").trim();
+    if (ctx.globals.help || !message) {
+        process.stdout.write(FEEDBACK_HELP);
+        return ctx.globals.help ? EXIT.OK : EXIT.USAGE;
+    }
+    const category = (flag("--category") || "other").toLowerCase().replace(/-/g, "_");
+    if (!FEEDBACK_CATEGORIES.includes(category)) {
+        throw new CliError(`--category must be one of: ${FEEDBACK_CATEGORIES.join(", ")}`, EXIT.USAGE);
+    }
+    if (message.length > 4000)
+        throw new CliError(`Feedback is limited to 4000 characters (got ${message.length})`, EXIT.USAGE);
+    if (!resolveApiKey(ctx.globals.apiKey)) {
+        throw new CliError("Sending feedback needs a Ludo account.", EXIT.AUTH, "Run `ludo login` (it can create an account), or open an issue at https://github.com/Ludo-AI/ludo-cli/issues");
+    }
+    const body = { category, message };
+    const operation = flag("--operation");
+    const jobs = [...new Set((parsed.flags.get("--job") || [])
+            .filter(v => v !== "\u0000flag")
+            .flatMap(v => v.split(","))
+            .map(v => v.trim())
+            .filter(Boolean))];
+    if (jobs.length > 10)
+        throw new CliError(`--job takes at most 10 job ids (got ${jobs.length})`, EXIT.USAGE);
+    const agent = agentName();
+    if (operation)
+        body.operation = operation.slice(0, 100);
+    // job_id alone for one job, so a single-job report also works on an API
+    // from before job_ids.
+    if (jobs.length)
+        body.job_id = jobs[0].slice(0, 64);
+    if (jobs.length > 1)
+        body.job_ids = jobs.map(j => j.slice(0, 64));
+    if (agent)
+        body.agent = agent;
+    const res = await ctx.api.call("POST", "/assets/feedback", { body });
+    if (ctx.jsonOut)
+        printJson(res.body, false);
+    else
+        process.stdout.write(`✓ Feedback sent. Thank you! (${res.body?.id || "received"})\n`);
+    return EXIT.OK;
+}
+// What is running, for crash reports: a command name, never its arguments.
+let commandLabel;
+// The spec the current run was built from, for the stale-spec retry below.
+let specInUse;
+// A cached or embedded spec can be behind the API. When a command, flag or
+// value is rejected locally and that spec did not just come from the server, refetch it and,
+// if the server has a newer one, run the command again against it. These
+// errors are all raised before anything is uploaded or submitted.
+async function run(argv) {
+    try {
+        return await main(argv);
+    }
+    catch (err) {
+        if (!(err instanceof CliError && err.specMismatch && (specInUse?.source === "cache" || specInUse?.source === "embedded")))
+            throw err;
+        const fresh = await loadSpec(specInUse.apiUrl, { forceRefresh: true });
+        if (fresh.source !== "server")
+            throw err;
+        // The command may exist in the newer spec; if not, main notes it again.
+        forgetFact("tried");
+        return main(argv);
+    }
+}
+async function main(argv) {
+    const parsed = parseArgv(argv);
+    const { globals, words } = parsed;
+    const ctx = makeCtx(globals);
+    const [first, second] = words;
+    if (["version", "login", "signup", "logout", "billing", "topup", "pricing", "update", "spec", "help", "agent-help", "preview", "skill", "feedback", "init", "assets", "spend", "batch"].includes(first))
+        commandLabel = first;
+    if (globals.help && BUILTIN_HELP[first]) {
+        process.stdout.write(BUILTIN_HELP[first]);
+        return EXIT.OK;
+    }
+    if (first === "version" || argv.includes("--version") || argv.includes("-v")) {
+        process.stdout.write(`${VERSION}\n`);
+        return EXIT.OK;
+    }
+    if (first === "login")
+        return login(ctx, parsed, words.slice(1));
+    if (first === "signup")
+        return signup(ctx, parsed);
+    if (first === "logout")
+        return logout(ctx);
+    if (first === "billing")
+        return billing(ctx);
+    if (first === "topup")
+        return topup(ctx, parsed);
+    if (first === "pricing")
+        return pricing(ctx);
+    if (first === "feedback")
+        return feedback(ctx, parsed, words.slice(1));
+    if (first === "update")
+        return update(ctx, parsed);
+    if (first === "init")
+        return init(ctx, parsed);
+    // Free and offline: dispatched before the API spec is loaded.
+    if (first === "toolbox")
+        return toolbox(ctx, parsed, argv, label => (commandLabel = label));
+    const apiUrl = resolveApiUrl(globals.apiUrl);
+    if (first === "spec") {
+        const loaded = await loadSpec(apiUrl, { forceRefresh: second === "refresh" });
+        if (second === "path")
+            process.stdout.write(`${loaded.location}\n`);
+        else
+            process.stdout.write(`API ${loaded.spec.info?.version} spec from ${loaded.source}: ${loaded.location}\nEmbedded fallback: ${embeddedSpecPath()}\n`);
+        return EXIT.OK;
+    }
+    const loaded = await loadSpec(apiUrl, { noWait: !first || first === "help" || globals.help });
+    specInUse = { apiUrl, source: loaded.source };
+    const { spec } = loaded;
+    const commands = buildCommands(spec);
+    if (!first || first === "help") {
+        commandLabel = "help";
+        const target = first === "help" ? words.slice(1) : [];
+        if (target.length)
+            return main([...target, "--help"]);
+        if (!first && ctx.vis.enabled)
+            process.stderr.write(logo(ctx.vis) + "\n\n");
+        process.stdout.write(mainHelp(commands) + "\n");
+        return first || globals.help ? EXIT.OK : EXIT.USAGE;
+    }
+    if (first === "agent-help") {
+        process.stdout.write(agentHelp(commands));
+        return EXIT.OK;
+    }
+    if (first === "skill") {
+        commandLabel = ["install", "uninstall", "path"].includes(second) ? `skill ${second}` : "skill";
+        return skill(ctx, parsed, words.slice(1));
+    }
+    if (first === "preview") {
+        commandLabel = "preview";
+        return preview(ctx, parsed, words.slice(1));
+    }
+    // Everything below works inside a project: .ludo.json settings, budget and
+    // asset log.
+    const pctx = makeCtx(globals, loadProject());
+    if (first === "spend")
+        return spend(pctx, words.slice(1));
+    if (first === "assets")
+        return assets(pctx, parsed, words.slice(1), commands);
+    if (first === "batch") {
+        if (globals.help || !words[1]) {
+            process.stdout.write(BATCH_HELP);
+            return globals.help ? EXIT.OK : EXIT.USAGE;
+        }
+        if (globals.n !== undefined)
+            throw new CliError("--n does not apply to a batch; list each job instead", EXIT.USAGE);
+        if (globals.name)
+            throw new CliError("--name does not apply to a batch; give each job its own \"name\"", EXIT.USAGE);
+        if (!globals.wait)
+            throw new CliError("ludo batch waits for its jobs; drop --no-wait", EXIT.USAGE);
+        const { preps, limit } = loadBatch(pctx, parsed, words[1], commands);
+        return runBatch(pctx, preps, limit);
+    }
+    // Built-ins living inside API groups.
+    if (first === "files" && second === "upload") {
+        commandLabel = "files upload";
+        if (globals.help || words.length < 3) {
+            process.stdout.write("Usage: ludo files upload <path>...\n\nUploads local files and prints their public URLs (deleted after 7 days).\nYou rarely need this: file flags upload local paths for you.\n");
+            return globals.help ? EXIT.OK : EXIT.USAGE;
+        }
+        ctx.api.requireKey();
+        const results = [];
+        for (const file of words.slice(2))
+            results.push({ path: file, url: await uploadFile(ctx.api, file, "", ctx.log, { reuse: false }) });
+        if (ctx.jsonOut)
+            printJson(results, false);
+        else
+            results.forEach(r => process.stdout.write(`${r.url}\n`));
+        return EXIT.OK;
+    }
+    if (first === "jobs" && second === "wait") {
+        commandLabel = "jobs wait";
+        if (globals.help || !words[2]) {
+            process.stdout.write("Usage: ludo jobs wait <id> [--out <dir>] [--name <base>] [--timeout <s>] [--no-download]\n\nWaits for a job to finish, then saves its result files like a generation command does\n(named after --name, if given) and records them in ludo-assets.json.\n");
+            return globals.help ? EXIT.OK : EXIT.USAGE;
+        }
+        return runJobWait(pctx, words[2], `job ${words[2]}`);
+    }
+    const groups = groupsOf(commands);
+    let { command, consumed } = findCommand(commands, words);
+    // A group with a single command runs it by name alone: `ludo account`.
+    if (!command && groups.includes(first) && !second) {
+        const only = commands.filter(c => c.group === first && !c.hidden);
+        if (only.length === 1)
+            ({ command, consumed } = { command: only[0], consumed: 1 });
+    }
+    if (!command) {
+        if (groups.includes(first) && (!second || globals.help)) {
+            process.stdout.write(groupHelp(commands, first) + "\n");
+            return second || globals.help ? EXIT.OK : EXIT.USAGE;
+        }
+        const tried = triedName(groups.includes(first) ? [first, second] : [first]);
+        if (tried)
+            noteFact("tried", tried);
+        if (groups.includes(first)) {
+            throw specMismatch(`Unknown command: ludo ${first} ${second}`, `Commands: ${commands.filter(c => c.group === first && !c.hidden).map(c => c.name).join(", ")}`);
+        }
+        throw specMismatch(`Unknown command: ${first}`, `Groups: ${groups.join(", ")}. Run \`ludo --help\`.`);
+    }
+    commandLabel = `${command.group} ${command.name}`;
+    if (globals.help) {
+        process.stdout.write(commandHelp(command) + "\n");
+        return EXIT.OK;
+    }
+    return runCommand(pctx, command, parsed, words.slice(consumed));
+}
+// Out of credits (or no API access) at a terminal: offer to open the billing
+// page. Never for an agent or a script: they get the hint and exit code 5.
+async function offerBilling() {
+    if (!canOpenBrowser())
+        return;
+    let apiUrl;
+    try {
+        apiUrl = resolveApiUrl(parseArgv(process.argv.slice(2)).globals.apiUrl);
+    }
+    catch {
+        apiUrl = resolveApiUrl(undefined);
+    }
+    const rl = readline.createInterface({ input: process.stdin, output: process.stderr, terminal: true });
+    // Never hang: no answer in 20 seconds counts as no.
+    const answer = await new Promise(resolve => {
+        const timer = setTimeout(() => resolve("n"), 20_000);
+        rl.question("Open the billing page? [Y/n] ", a => {
+            clearTimeout(timer);
+            resolve(a);
+        });
+    });
+    rl.close();
+    if (/^(y|yes|)$/i.test(answer.trim()))
+        openBrowser(billingUrlFor(apiUrl));
+}
+const quietRun = process.argv.includes("--quiet");
+const startedAt = Date.now();
+const argvForTelemetry = process.argv.slice(2);
+armCrashReports();
+armTelemetry();
+// Interrupted (Ctrl-C, or an agent stopping a long command): still report it.
+onExit(code => sendTelemetry(commandLabel, code, startedAt, argvForTelemetry));
+handleSignals();
+// Ends the run with this code WITHOUT process.exit(): on Windows, exiting while
+// fetch's connection pool is still closing trips a libuv assertion
+// (UV_HANDLE_CLOSING, nodejs/node#58091) and turns every exit code into a
+// crash (0xC0000409). Node exits by itself once the pool has closed; the
+// unref'd timer only fires if something unexpected keeps the process alive.
+function finish(code) {
+    process.exitCode = code;
+    setTimeout(() => process.exit(code), 3000).unref();
+}
+// Starts an automatic update when one is due; never fails the command that ran.
+function checkForUpdate() {
+    try {
+        noteUpdate(maybeAutoUpdate(commandLabel || "", latestVersion()));
+    }
+    catch {
+        // The next run checks again.
+    }
+}
+run(process.argv.slice(2)).then(async (code) => {
+    refreshSkills();
+    checkForUpdate();
+    flushNotes(quietRun);
+    await sendTelemetry(commandLabel, code, startedAt, argvForTelemetry);
+    finish(code);
+}, async (err) => {
+    err = localFsError(err) || err;
+    const json = process.argv.includes("--json") || !process.stdout.isTTY;
+    refreshSkills();
+    checkForUpdate();
+    flushNotes(quietRun);
+    if (err instanceof CliError) {
+        if (json)
+            printJson({ error: { message: err.message, exit_code: err.exitCode, hint: err.hint, details: err.details } }, false);
+        process.stderr.write(`Error: ${err.message}\n${err.hint ? `${err.hint}\n` : ""}`);
+        if (err.exitCode === EXIT.CREDITS && !json)
+            await offerBilling();
+        if (err.reason)
+            noteFact("error_code", err.reason);
+        await sendTelemetry(commandLabel, err.exitCode, startedAt, argvForTelemetry);
+        return finish(err.exitCode);
+    }
+    // Anything else is a bug in the CLI.
+    process.stderr.write(`Error: ${err?.stack || err}\n`);
+    const eventId = await reportCrash(err, commandLabel);
+    if (eventId)
+        process.stderr.write(`This looks like a bug in ludo; a crash report was sent (${eventId}). Set LUDO_TELEMETRY=0 to stop sending them.\n`);
+    await sendTelemetry(commandLabel, EXIT.ERROR, startedAt, argvForTelemetry);
+    finish(EXIT.ERROR);
+});
